@@ -1,209 +1,118 @@
-use std::ffi::{c_void, CString, NulError};
-use std::marker::PhantomData;
-use std::path::Path;
-use std::sync::atomic::{AtomicBool, Ordering};
+use pdfium_core;
+use std::cell::RefCell;
+use std::rc::Rc;
+pub use pdfium_core::{BitmapFormat, PageOrientation};
 
-pub struct PDFium(PhantomData<()>);
-
-static INITIALIZED: AtomicBool = AtomicBool::new(false);
-
-impl Drop for PDFium {
-    fn drop(&mut self) {
-        unsafe {
-            pdfium_bindings::FPDF_DestroyLibrary();
-        }
-        INITIALIZED.store(false, Ordering::Relaxed);
-    }
+pub struct Library {
+    core: Rc<RefCell<pdfium_core::Library>>
 }
 
-impl PDFium {
-    pub fn init() -> Option<PDFium> {
-        let already_initialized = INITIALIZED.compare_and_swap(false, true, Ordering::SeqCst);
-
-        if already_initialized {
-            None
-        } else {
-            unsafe {
-                pdfium_bindings::FPDF_InitLibrary();
-            }
-            Some(PDFium(Default::default()))
-        }
+impl Library {
+    pub fn init() -> Option<Library> {
+        pdfium_core::Library::init_library().map(|library| Library {
+            core: Rc::new(RefCell::new(library))
+        })
     }
 
-    pub fn get_last_error(&self) -> u64 {
-        unsafe { pdfium_bindings::FPDF_GetLastError() }
-    }
-
-    pub fn load_document<'a>(&'a self, path: &Path) -> Result<Option<Document<'a>>, NulError> {
-        let path = CString::new(path.to_string_lossy().to_string().into_bytes())?.as_ptr();
-        let handle = unsafe { pdfium_bindings::FPDF_LoadDocument(path, std::ptr::null()).as_mut() };
-
-        Ok(handle.map(|handle| Document {
-            handle,
-            life_time: Default::default(),
-        }))
-    }
-
-    pub fn load_document_with_password<'a>(
-        &'a self,
-        path: &Path,
-        password: impl Into<Vec<u8>>,
-    ) -> Result<Option<Document<'a>>, NulError> {
-        let path = CString::new(path.to_string_lossy().to_string().into_bytes())?.as_ptr();
-        let password = CString::new(password)?.as_ptr();
-        let handle = unsafe { pdfium_bindings::FPDF_LoadDocument(path, password).as_mut() };
-
-        Ok(handle.map(|handle| Document {
-            handle,
-            life_time: Default::default(),
-        }))
-    }
-
-    pub fn document_from_bytes<'a>(&'a self, buffer: &'a [u8]) -> Option<Document<'a>> {
-        let handle = unsafe {
-            pdfium_bindings::FPDF_LoadMemDocument(
-                buffer.as_ptr() as *mut c_void,
-                buffer.len() as i32,
-                std::ptr::null(),
-            )
-            .as_mut()
-        };
+    pub fn document_from_bytes<'a>(&self, buffer: &'a [u8]) -> Option<Document<'a>> {
+        let handle = self.core.borrow_mut().load_mem_document(buffer, []).unwrap();
 
         handle.map(|handle| Document {
             handle,
-            life_time: Default::default(),
+            core: self.core.clone(),
         })
     }
 
     pub fn bitmap_from_external_buffer<'a>(
-        &'a self,
-        width: u32,
-        height: u32,
+        &self,
+        width: usize,
+        height: usize,
         height_stride: usize,
+        format: BitmapFormat,
         buffer: &'a mut [u8],
     ) -> Option<Bitmap<'a>> {
-        if buffer.len() < (height as usize) * height_stride {
-            return None;
-        }
 
-        let handle = unsafe {
-            pdfium_bindings::FPDFBitmap_CreateEx(
-                width as i32,
-                height as i32,
-                pdfium_bindings::FPDFBitmap_BGRA as i32,
-                buffer.as_ptr() as *mut c_void,
-                height_stride as i32,
-            )
-            .as_mut()
-        };
+        let handle = self.core.borrow_mut().create_external_bitmap(
+            width,
+            height,
+            format,
+            buffer,
+            height_stride,
+        );
 
         handle.map(|handle| Bitmap {
             handle,
-            life_time: Default::default(),
+            core: self.core.clone(),
         })
     }
 }
 
 pub struct Document<'a> {
-    handle: pdfium_bindings::FPDF_DOCUMENT,
-    life_time: PhantomData<&'a [u8]>,
-}
-
-impl<'a> Drop for Document<'a> {
-    fn drop(&mut self) {
-        unsafe {
-            pdfium_bindings::FPDF_CloseDocument(self.handle);
-        }
-    }
+    handle: pdfium_core::DocumentHandle<'a>,
+    core: Rc<RefCell<pdfium_core::Library>>,
 }
 
 impl<'a> Document<'a> {
     pub fn page_count(&self) -> usize {
-        unsafe { pdfium_bindings::FPDF_GetPageCount(self.handle) as usize }
+        self.core.borrow_mut().get_page_count(&self.handle)
     }
 
     pub fn page(&self, index: usize) -> Option<Page> {
-        let handle = unsafe { pdfium_bindings::FPDF_LoadPage(self.handle, index as i32).as_mut() };
+        let handle = self.core.borrow_mut().load_page(&self.handle, index);
 
         handle.map(|handle| Page {
             handle,
-            life_time: Default::default(),
+            core: self.core.clone(),
         })
     }
 }
 
 pub struct Page<'a> {
-    handle: pdfium_bindings::FPDF_PAGE,
-    life_time: PhantomData<&'a [u8]>,
-}
-
-impl<'a> Drop for Page<'a> {
-    fn drop(&mut self) {
-        unsafe {
-            pdfium_bindings::FPDF_ClosePage(self.handle);
-        }
-    }
+    handle: pdfium_core::PageHandle<'a>,
+    core: Rc<RefCell<pdfium_core::Library>>,
 }
 
 impl<'a> Page<'a> {
     pub fn width(&self) -> f32 {
-        unsafe { pdfium_bindings::FPDF_GetPageWidthF(self.handle) }
+        self.core.borrow_mut().get_page_width(&self.handle)
     }
 
     pub fn height(&self) -> f32 {
-        unsafe { pdfium_bindings::FPDF_GetPageHeightF(self.handle) }
+        self.core.borrow_mut().get_page_height(&self.handle)
     }
 
     pub fn render_to(&self, bitmap: &mut Bitmap) {
-        dbg!(
-            bitmap.handle,
-            self.handle,
+        let width = bitmap.width() as i32;
+        let height = bitmap.height() as i32;
+        self.core.borrow_mut().render_page_bitmap(
+            &mut bitmap.handle,
+            &self.handle,
             0,
             0,
-            bitmap.width() as i32,
-            bitmap.height() as i32,
+            width,
+            height,
+            PageOrientation::Normal,
             0,
-            0
         );
-        unsafe {
-            pdfium_bindings::FPDF_RenderPageBitmap(
-                bitmap.handle,
-                self.handle,
-                0,
-                0,
-                bitmap.width() as i32,
-                bitmap.height() as i32,
-                0,
-                0,
-            );
-        }
     }
 }
 
 pub struct Bitmap<'a> {
-    handle: pdfium_bindings::FPDF_BITMAP,
-    life_time: PhantomData<&'a mut [u8]>,
-}
-
-impl<'a> Drop for Bitmap<'a> {
-    fn drop(&mut self) {
-        unsafe {
-            pdfium_bindings::FPDFBitmap_Destroy(self.handle);
-        }
-    }
+    handle: pdfium_core::BitmapHandle<'a>,
+    core: Rc<RefCell<pdfium_core::Library>>,
 }
 
 impl<'a> Bitmap<'a> {
     pub fn width(&self) -> u32 {
-        unsafe { pdfium_bindings::FPDFBitmap_GetWidth(self.handle) as u32 }
+        self.core.borrow_mut().get_bitmap_width(&self.handle)
     }
 
     pub fn height(&self) -> u32 {
-        unsafe { pdfium_bindings::FPDFBitmap_GetHeight(self.handle) as u32 }
+        self.core.borrow_mut().get_bitmap_height(&self.handle)
     }
 
     pub fn fill_rect(&mut self, x: i32, y: i32, width: i32, height: i32, color: u64) {
-        unsafe { pdfium_bindings::FPDFBitmap_FillRect(self.handle, x, y, width, height, color) }
+        self.core.borrow_mut().bitmap_fill_rect(&mut self.handle, x, y, width, height, color)
     }
 }
 
@@ -218,27 +127,27 @@ static TEST_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 #[cfg(test)]
 mod tests {
     use super::*;
-    use image::{Bgra, DynamicImage, ImageBuffer};
+    use image::{Bgra, ImageBuffer};
 
     static DUMMY_PDF: &'static [u8] = include_bytes!("../test_assets/dummy.pdf");
 
     #[test]
     fn only_one_library_at_a_time() {
         let _guard = TEST_LOCK.lock().unwrap();
-        let first = PDFium::init();
+        let first = Library::init();
         assert!(first.is_some());
-        let second = PDFium::init();
+        let second = Library::init();
         assert!(second.is_none());
 
         drop(first);
-        let third = PDFium::init();
+        let third = Library::init();
         assert!(third.is_some());
     }
 
     #[test]
     fn page_count() {
         let _guard = TEST_LOCK.lock().unwrap();
-        let library = PDFium::init().unwrap();
+        let library = Library::init().unwrap();
         let document = library.document_from_bytes(DUMMY_PDF).unwrap();
 
         assert_eq!(document.page_count(), 1);
@@ -247,7 +156,7 @@ mod tests {
     #[test]
     fn page_dimensions() {
         let _guard = TEST_LOCK.lock().unwrap();
-        let library = PDFium::init().unwrap();
+        let library = Library::init().unwrap();
         let document = library.document_from_bytes(DUMMY_PDF).unwrap();
         let page = document.page(0).unwrap();
 
@@ -258,7 +167,7 @@ mod tests {
     #[test]
     fn render() {
         let _guard = TEST_LOCK.lock().unwrap();
-        let library = PDFium::init().unwrap();
+        let library = Library::init().unwrap();
         let document = library.document_from_bytes(DUMMY_PDF).unwrap();
         let page = document.page(0).unwrap();
 
@@ -274,12 +183,10 @@ mod tests {
         let buffer = buffer.image_mut_slice().unwrap();
 
         let mut bitmap = library
-            .bitmap_from_external_buffer(width, height, layout.height_stride, buffer)
+            .bitmap_from_external_buffer(width as usize, height as usize, layout.height_stride, BitmapFormat::BGRA, buffer)
             .unwrap();
 
         page.render_to(&mut bitmap);
-
-        assert_eq!(library.get_last_error(), 0);
 
         drop(bitmap);
 
