@@ -49,14 +49,19 @@ impl Library {
         }))
     }
 
-    pub fn load_mem_document<'a>(&mut self, buffer: &'a [u8], password: impl Into<Vec<u8>>) -> Result<Option<DocumentHandle<'a>>, NulError> {
+    pub fn load_mem_document<'a>(
+        &mut self,
+        buffer: &'a [u8],
+        password: impl Into<Vec<u8>>,
+    ) -> Result<Option<DocumentHandle<'a>>, NulError> {
         let password = CString::new(password)?.as_ptr();
         let handle = unsafe {
             pdfium_bindings::FPDF_LoadMemDocument(
                 buffer.as_ptr() as *mut c_void,
                 buffer.len() as i32,
                 password,
-            ).as_mut()
+            )
+            .as_mut()
         };
 
         Ok(handle.map(|handle| DocumentHandle {
@@ -88,7 +93,8 @@ impl Library {
                 format as i32,
                 buffer.as_ptr() as *mut c_void,
                 height_stride as i32,
-            ).as_mut()
+            )
+            .as_mut()
         };
 
         handle.map(|handle| BitmapHandle {
@@ -97,9 +103,13 @@ impl Library {
         })
     }
 
-
-    pub fn load_page<'a>(&mut self, document: &'a DocumentHandle, index: usize) -> Option<PageHandle<'a>> {
-        let handle = unsafe { pdfium_bindings::FPDF_LoadPage(document.handle, index as i32).as_mut() };
+    pub fn load_page<'a>(
+        &mut self,
+        document: &'a DocumentHandle,
+        index: usize,
+    ) -> Option<PageHandle<'a>> {
+        let handle =
+            unsafe { pdfium_bindings::FPDF_LoadPage(document.handle, index as i32).as_mut() };
 
         handle.map(|handle| PageHandle {
             handle,
@@ -115,7 +125,17 @@ impl Library {
         unsafe { pdfium_bindings::FPDF_GetPageHeightF(page.handle) }
     }
 
-    pub fn render_page_bitmap(&mut self, bitmap: &mut BitmapHandle, page: &PageHandle, x: i32, y: i32, width: i32, height: i32, orientation: PageOrientation, flags: i32) {
+    pub fn render_page_bitmap(
+        &mut self,
+        bitmap: &mut BitmapHandle,
+        page: &PageHandle,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        orientation: PageOrientation,
+        flags: i32,
+    ) {
         unsafe {
             pdfium_bindings::FPDF_RenderPageBitmap(
                 bitmap.handle,
@@ -138,7 +158,15 @@ impl Library {
         unsafe { pdfium_bindings::FPDFBitmap_GetHeight(bitmap.handle) as u32 }
     }
 
-    pub fn bitmap_fill_rect(&mut self, bitmap: &mut BitmapHandle, x: i32, y: i32, width: i32, height: i32, color: u64) {
+    pub fn bitmap_fill_rect(
+        &mut self,
+        bitmap: &mut BitmapHandle,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        color: u64,
+    ) {
         unsafe { pdfium_bindings::FPDFBitmap_FillRect(bitmap.handle, x, y, width, height, color) }
     }
 }
@@ -258,7 +286,6 @@ mod tests {
         let document = library.load_mem_document(DUMMY_PDF, []).unwrap().unwrap();
         let page = library.load_page(&document, 0).unwrap();
 
-
         let width = library.get_page_width(&page).round() as usize;
         let height = library.get_page_height(&page).round() as usize;
         const CHANNELS: usize = 4;
@@ -266,10 +293,25 @@ mod tests {
         let mut buffer: Vec<u8> = vec![0xFF; CHANNELS * width * height];
 
         let mut bitmap = library
-            .create_external_bitmap(width, height, BitmapFormat::BGRA, &mut buffer, width * CHANNELS)
+            .create_external_bitmap(
+                width,
+                height,
+                BitmapFormat::BGRA,
+                &mut buffer,
+                width * CHANNELS,
+            )
             .unwrap();
 
-        library.render_page_bitmap(&mut bitmap, &page, 0, 0, width as i32, height as i32, PageOrientation::Normal, 0);
+        library.render_page_bitmap(
+            &mut bitmap,
+            &page,
+            0,
+            0,
+            width as i32,
+            height as i32,
+            PageOrientation::Normal,
+            0,
+        );
 
         assert_eq!(library.get_last_error(), 0);
 

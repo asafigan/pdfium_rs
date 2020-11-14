@@ -1,21 +1,24 @@
-use pdfium_core;
+pub use pdfium_core::{BitmapFormat, PageOrientation};
 use std::cell::RefCell;
 use std::rc::Rc;
-pub use pdfium_core::{BitmapFormat, PageOrientation};
 
 pub struct Library {
-    core: Rc<RefCell<pdfium_core::Library>>
+    core: Rc<RefCell<pdfium_core::Library>>,
 }
 
 impl Library {
     pub fn init() -> Option<Library> {
         pdfium_core::Library::init_library().map(|library| Library {
-            core: Rc::new(RefCell::new(library))
+            core: Rc::new(RefCell::new(library)),
         })
     }
 
     pub fn document_from_bytes<'a>(&self, buffer: &'a [u8]) -> Option<Document<'a>> {
-        let handle = self.core.borrow_mut().load_mem_document(buffer, []).unwrap();
+        let handle = self
+            .core
+            .borrow_mut()
+            .load_mem_document(buffer, [])
+            .unwrap();
 
         handle.map(|handle| Document {
             handle,
@@ -31,7 +34,6 @@ impl Library {
         format: BitmapFormat,
         buffer: &'a mut [u8],
     ) -> Option<Bitmap<'a>> {
-
         let handle = self.core.borrow_mut().create_external_bitmap(
             width,
             height,
@@ -112,7 +114,9 @@ impl<'a> Bitmap<'a> {
     }
 
     pub fn fill_rect(&mut self, x: i32, y: i32, width: i32, height: i32, color: u64) {
-        self.core.borrow_mut().bitmap_fill_rect(&mut self.handle, x, y, width, height, color)
+        self.core
+            .borrow_mut()
+            .bitmap_fill_rect(&mut self.handle, x, y, width, height, color)
     }
 }
 
@@ -183,7 +187,13 @@ mod tests {
         let buffer = buffer.image_mut_slice().unwrap();
 
         let mut bitmap = library
-            .bitmap_from_external_buffer(width as usize, height as usize, layout.height_stride, BitmapFormat::BGRA, buffer)
+            .bitmap_from_external_buffer(
+                width as usize,
+                height as usize,
+                layout.height_stride,
+                BitmapFormat::BGRA,
+                buffer,
+            )
             .unwrap();
 
         page.render_to(&mut bitmap);
