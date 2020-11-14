@@ -3,11 +3,11 @@ use std::marker::PhantomData;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 
-pub struct PDFium(PhantomData<()>);
+pub struct Library(PhantomData<()>);
 
 static INITIALIZED: AtomicBool = AtomicBool::new(false);
 
-impl Drop for PDFium {
+impl Drop for Library {
     fn drop(&mut self) {
         unsafe {
             pdfium_bindings::FPDF_DestroyLibrary();
@@ -16,8 +16,8 @@ impl Drop for PDFium {
     }
 }
 
-impl PDFium {
-    pub fn init_library() -> Option<PDFium> {
+impl Library {
+    pub fn init_library() -> Option<Library> {
         let already_initialized = INITIALIZED.compare_and_swap(false, true, Ordering::SeqCst);
 
         if already_initialized {
@@ -26,7 +26,7 @@ impl PDFium {
             unsafe {
                 pdfium_bindings::FPDF_InitLibrary();
             }
-            Some(PDFium(Default::default()))
+            Some(Library(Default::default()))
         }
     }
 
@@ -221,20 +221,20 @@ mod tests {
     #[test]
     fn only_one_library_at_a_time() {
         let _guard = TEST_LOCK.lock().unwrap();
-        let first = PDFium::init_library();
+        let first = Library::init_library();
         assert!(first.is_some());
-        let second = PDFium::init_library();
+        let second = Library::init_library();
         assert!(second.is_none());
 
         drop(first);
-        let third = PDFium::init_library();
+        let third = Library::init_library();
         assert!(third.is_some());
     }
 
     #[test]
     fn page_count() {
         let _guard = TEST_LOCK.lock().unwrap();
-        let mut library = PDFium::init_library().unwrap();
+        let mut library = Library::init_library().unwrap();
         let document = library.load_mem_document(DUMMY_PDF, []).unwrap().unwrap();
 
         assert_eq!(library.get_page_count(&document), 1);
@@ -243,7 +243,7 @@ mod tests {
     #[test]
     fn page_dimensions() {
         let _guard = TEST_LOCK.lock().unwrap();
-        let mut library = PDFium::init_library().unwrap();
+        let mut library = Library::init_library().unwrap();
         let document = library.load_mem_document(DUMMY_PDF, []).unwrap().unwrap();
         let page = library.load_page(&document, 0).unwrap();
 
@@ -254,7 +254,7 @@ mod tests {
     #[test]
     fn render() {
         let _guard = TEST_LOCK.lock().unwrap();
-        let mut library = PDFium::init_library().unwrap();
+        let mut library = Library::init_library().unwrap();
         let document = library.load_mem_document(DUMMY_PDF, []).unwrap().unwrap();
         let page = library.load_page(&document, 0).unwrap();
 
