@@ -1,5 +1,5 @@
 [package]
-name = "pdfium_rs_core"
+name = "pdfium_core"
 version = "0.1.0"
 authors = ["Andrew Safigan <asafigan@gmail.com>"]
 edition = "2018"
