@@ -1,6 +1,7 @@
 use std::ffi::{c_void, CString, NulError};
 use std::marker::PhantomData;
 use std::path::Path;
+use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 pub struct Library(PhantomData<()>);
@@ -41,7 +42,7 @@ impl Library {
     ) -> Result<Option<DocumentHandle<'static>>, NulError> {
         let path = CString::new(path.to_string_lossy().to_string().into_bytes())?.as_ptr();
         let password = CString::new(password)?.as_ptr();
-        let handle = unsafe { pdfium_bindings::FPDF_LoadDocument(path, password).as_mut() };
+        let handle = NonNull::new(unsafe { pdfium_bindings::FPDF_LoadDocument(path, password) });
 
         Ok(handle.map(|handle| DocumentHandle {
             handle,
@@ -55,14 +56,13 @@ impl Library {
         password: impl Into<Vec<u8>>,
     ) -> Result<Option<DocumentHandle<'a>>, NulError> {
         let password = CString::new(password)?.as_ptr();
-        let handle = unsafe {
+        let handle = NonNull::new(unsafe {
             pdfium_bindings::FPDF_LoadMemDocument(
                 buffer.as_ptr() as *mut c_void,
                 buffer.len() as i32,
                 password,
             )
-            .as_mut()
-        };
+        });
 
         Ok(handle.map(|handle| DocumentHandle {
             handle,
@@ -71,7 +71,7 @@ impl Library {
     }
 
     pub fn get_page_count(&mut self, document: &DocumentHandle) -> usize {
-        unsafe { pdfium_bindings::FPDF_GetPageCount(document.handle) as usize }
+        unsafe { pdfium_bindings::FPDF_GetPageCount(document.handle.as_ptr()) as usize }
     }
 
     pub fn create_external_bitmap<'a>(
@@ -86,7 +86,7 @@ impl Library {
             return None;
         }
 
-        let handle = unsafe {
+        let handle = NonNull::new(unsafe {
             pdfium_bindings::FPDFBitmap_CreateEx(
                 width as i32,
                 height as i32,
@@ -94,8 +94,7 @@ impl Library {
                 buffer.as_ptr() as *mut c_void,
                 height_stride as i32,
             )
-            .as_mut()
-        };
+        });
 
         handle.map(|handle| BitmapHandle {
             handle,
@@ -108,8 +107,9 @@ impl Library {
         document: &'a DocumentHandle,
         index: usize,
     ) -> Option<PageHandle<'a>> {
-        let handle =
-            unsafe { pdfium_bindings::FPDF_LoadPage(document.handle, index as i32).as_mut() };
+        let handle = NonNull::new(unsafe {
+            pdfium_bindings::FPDF_LoadPage(document.handle.as_ptr(), index as i32)
+        });
 
         handle.map(|handle| PageHandle {
             handle,
@@ -118,11 +118,11 @@ impl Library {
     }
 
     pub fn get_page_width(&mut self, page: &PageHandle) -> f32 {
-        unsafe { pdfium_bindings::FPDF_GetPageWidthF(page.handle) }
+        unsafe { pdfium_bindings::FPDF_GetPageWidthF(page.handle.as_ptr()) }
     }
 
     pub fn get_page_height(&mut self, page: &PageHandle) -> f32 {
-        unsafe { pdfium_bindings::FPDF_GetPageHeightF(page.handle) }
+        unsafe { pdfium_bindings::FPDF_GetPageHeightF(page.handle.as_ptr()) }
     }
 
     pub fn render_page_bitmap(
@@ -138,8 +138,8 @@ impl Library {
     ) {
         unsafe {
             pdfium_bindings::FPDF_RenderPageBitmap(
-                bitmap.handle,
-                page.handle,
+                bitmap.handle.as_ptr(),
+                page.handle.as_ptr(),
                 x,
                 y,
                 width,
@@ -151,11 +151,11 @@ impl Library {
     }
 
     pub fn get_bitmap_width(&mut self, bitmap: &BitmapHandle) -> u32 {
-        unsafe { pdfium_bindings::FPDFBitmap_GetWidth(bitmap.handle) as u32 }
+        unsafe { pdfium_bindings::FPDFBitmap_GetWidth(bitmap.handle.as_ptr()) as u32 }
     }
 
     pub fn get_bitmap_height(&mut self, bitmap: &BitmapHandle) -> u32 {
-        unsafe { pdfium_bindings::FPDFBitmap_GetHeight(bitmap.handle) as u32 }
+        unsafe { pdfium_bindings::FPDFBitmap_GetHeight(bitmap.handle.as_ptr()) as u32 }
     }
 
     pub fn bitmap_fill_rect(
@@ -167,7 +167,9 @@ impl Library {
         height: i32,
         color: u64,
     ) {
-        unsafe { pdfium_bindings::FPDFBitmap_FillRect(bitmap.handle, x, y, width, height, color) }
+        unsafe {
+            pdfium_bindings::FPDFBitmap_FillRect(bitmap.handle.as_ptr(), x, y, width, height, color)
+        }
     }
 }
 
@@ -194,40 +196,40 @@ pub enum PageOrientation {
 }
 
 pub struct DocumentHandle<'a> {
-    handle: pdfium_bindings::FPDF_DOCUMENT,
+    handle: NonNull<pdfium_bindings::fpdf_document_t__>,
     life_time: PhantomData<&'a [u8]>,
 }
 
 impl<'a> Drop for DocumentHandle<'a> {
     fn drop(&mut self) {
         unsafe {
-            pdfium_bindings::FPDF_CloseDocument(self.handle);
+            pdfium_bindings::FPDF_CloseDocument(self.handle.as_ptr());
         }
     }
 }
 
 pub struct PageHandle<'a> {
-    handle: pdfium_bindings::FPDF_PAGE,
+    handle: NonNull<pdfium_bindings::fpdf_page_t__>,
     life_time: PhantomData<&'a [u8]>,
 }
 
 impl<'a> Drop for PageHandle<'a> {
     fn drop(&mut self) {
         unsafe {
-            pdfium_bindings::FPDF_ClosePage(self.handle);
+            pdfium_bindings::FPDF_ClosePage(self.handle.as_ptr());
         }
     }
 }
 
 pub struct BitmapHandle<'a> {
-    handle: pdfium_bindings::FPDF_BITMAP,
+    handle: NonNull<pdfium_bindings::fpdf_bitmap_t__>,
     life_time: PhantomData<&'a mut [u8]>,
 }
 
 impl<'a> Drop for BitmapHandle<'a> {
     fn drop(&mut self) {
         unsafe {
-            pdfium_bindings::FPDFBitmap_Destroy(self.handle);
+            pdfium_bindings::FPDFBitmap_Destroy(self.handle.as_ptr());
         }
     }
 }
