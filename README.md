@@ -6,7 +6,7 @@ Using the PDFium library to render PDFs in Rust.
 ## Road Map
 
 - 🚀 MVP (can render an image)
-- 🤷‍♀️ Prevent misuse (Ensure synchronization between threads)
+- 🚀 Prevent misuse (Ensure synchronization between threads)
 - Documentation
 - Examples
 - Improve Tests

@@ -1,3 +1,18 @@
+//! The PDFium library is not safe so all types in `pdfium_rs` are `!Send` and `!Sync`.
+//! Trying to use these types across threads will not compile.
+//!
+//! Example:
+//! ```compile_fail
+//! use pdfium_rs::Library;
+//!
+//! let mut library = Library::init().unwrap();
+//!
+//! // Fails to compile because Library is !Send.
+//! std::thread::spawn(move || {
+//!     let document = library.document_from_bytes(&[]);
+//! });
+//! ```
+
 pub use pdfium_core::{BitmapFormat, PageOrientation};
 use std::cell::RefCell;
 use std::rc::Rc;
