@@ -1,3 +1,77 @@
+//! `pdfium_core` is a safe and minimal Rust wrapper around the PDFium library.
+//!
+//! ## Example
+//! Here is an example of getting the number of pages in a PDF:
+//! ```no_run
+//! use pdfium_core::Library;
+//! use std::path::Path;
+//! 
+//! let mut library = Library::init_library().unwrap();
+//! 
+//! // empty password
+//! let password = [];
+//! let document_handle = library
+//!     .load_document(Path::new("example.pdf"), password)
+//!     .unwrap()
+//!     .unwrap();
+//! 
+//! println!("{}", library.get_page_count(&document_handle));
+//! ```
+//! 
+//! The first thing to notice is that all methods are implemented on the `Library` struct.
+//! This is because of two reasons: the PDFium library must be initialize before using it and
+//! it is not thread safe. Modeling the PDFium library as a resource ensures that is must be initialized
+//! before being used. Also all methods require a mutable reference to the library to ensure that
+//! synchronization has occurred before calling any method in the library.
+//! 
+//! ## Initializing the library
+//! Another thing to notice is that `Library::init_library()` returns an option. This is because PDFium can only
+//! be initialized once per process without being uninitialized first. The library will be
+//! uninitialized when the Library struct is dropped.
+//! 
+//! For example:
+//! ```
+//! use pdfium_core::Library;
+//! 
+//! let library = Library::init_library();
+//! assert!(library.is_some());
+//! 
+//! assert!(Library::init_library().is_none());
+//! 
+//! drop(library);
+//! assert!(Library::init_library().is_some());
+//! ```
+//! 
+//! ## Handles
+//! `pdfium_core` uses handles that wrap non-null pointers in order to manage the resources
+//! used by PDFium. All of the handles will track the correct lifetimes of the underlying resources
+//! and will clean up these resources when they are dropped.
+//! 
+//! For example:
+//! ```no_run
+//! let mut library = Library::init_library();
+//! 
+//! use pdfium_core::Library;
+//! use std::path::Path;
+//! 
+//! let mut library = Library::init_library().unwrap();
+//! 
+//! let document_handle = library
+//!     .load_document(Path::new("example.pdf"), [])
+//!     .unwrap()
+//!     .unwrap();
+//! 
+//! // load first page
+//! let page_handle = library.load_page(&document_handle, 0).unwrap();
+//! 
+//! // can't drop the document_handle before the page_handle because 
+//! // the page can't outlive its parent document.
+//! 
+//! // uncommenting the next line would cause a compile time error.
+//! // drop(document_handle);
+//! drop(page_handle);
+//! ```
+
 use std::ffi::{c_void, CString, NulError};
 use std::marker::PhantomData;
 use std::path::Path;

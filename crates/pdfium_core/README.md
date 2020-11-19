@@ -1,2 +1,2 @@
 # PDFium Core
-a safe, minimal rust wrapper around the PDFium library.
+A safe, minimal Rust wrapper around the PDFium library.
