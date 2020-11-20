@@ -70,6 +70,8 @@
 //! drop(page_handle);
 //! ```
 
+#![allow(clippy::too_many_arguments)]
+
 use std::ffi::{c_void, CString};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
@@ -146,7 +148,7 @@ impl Library {
     /// assert_eq!(library.get_last_error(), None);
     ///
     /// // invalid document
-    /// library.load_mem_document(&[], None);
+    /// assert!(library.load_mem_document(&[], None).is_none());
     /// assert_eq!(library.get_last_error(), Some(PdfiumError::BadFormat));
     /// ```
     pub fn get_last_error(&mut self) -> Option<PdfiumError> {
@@ -158,9 +160,8 @@ impl Library {
         path: CString,
         password: Option<CString>,
     ) -> Option<DocumentHandle<'static>> {
-        let password = password
-            .map(|x| x.as_ptr())
-            .unwrap_or_else(|| std::ptr::null());
+        let password = password.map(|x| x.as_ptr()).unwrap_or_else(std::ptr::null);
+
         let handle =
             NonNull::new(unsafe { pdfium_bindings::FPDF_LoadDocument(path.as_ptr(), password) });
 
@@ -175,9 +176,8 @@ impl Library {
         buffer: &'a [u8],
         password: Option<CString>,
     ) -> Option<DocumentHandle<'a>> {
-        let password = password
-            .map(|x| x.as_ptr())
-            .unwrap_or_else(|| std::ptr::null());
+        let password = password.map(|x| x.as_ptr()).unwrap_or_else(std::ptr::null);
+
         let handle = NonNull::new(unsafe {
             pdfium_bindings::FPDF_LoadMemDocument(
                 buffer.as_ptr() as *mut c_void,
