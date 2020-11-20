@@ -4,15 +4,14 @@
 //! Here is an example of getting the number of pages in a PDF:
 //! ```no_run
 //! use pdfium_core::Library;
-//! use std::path::Path;
+//! use std::ffi::CString;
 //!
 //! let mut library = Library::init_library().unwrap();
 //!
 //! // empty password
-//! let password = [];
+//! let password = None;
 //! let document_handle = library
-//!     .load_document(Path::new("example.pdf"), password)
-//!     .unwrap()
+//!     .load_document(CString::new("example.pdf").unwrap(), password)
 //!     .unwrap();
 //!
 //! println!("{}", library.get_page_count(&document_handle));
@@ -49,16 +48,15 @@
 //!
 //! For example:
 //! ```no_run
-//! let mut library = Library::init_library();
-//!
 //! use pdfium_core::Library;
-//! use std::path::Path;
+//! use std::ffi::CString;
+//!
+//! let mut library = Library::init_library();
 //!
 //! let mut library = Library::init_library().unwrap();
 //!
 //! let document_handle = library
-//!     .load_document(Path::new("example.pdf"), [])
-//!     .unwrap()
+//!     .load_document(CString::new("example.pdf").unwrap(), None)
 //!     .unwrap();
 //!
 //! // load first page
@@ -72,15 +70,16 @@
 //! drop(page_handle);
 //! ```
 
-use std::ffi::{c_void, CString, NulError};
+use std::ffi::{c_void, CString};
 use std::marker::PhantomData;
-use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A properly initialized instance of the PDFium library.
-/// 
+///
 /// The PDFium library is not thread safe so there can only be one instance per process.
+///
+/// The PDFium library will be uninitialized when this value is dropped.
 pub struct Library(PhantomData<()>);
 
 static INITIALIZED: AtomicBool = AtomicBool::new(false);
@@ -95,47 +94,90 @@ impl Drop for Library {
 }
 
 impl Library {
+    /// Initialize the PDFium library.
+    ///
+    /// The PDFium library is not thread safe so there can only be one instance per process.
+    ///
+    /// Will return `None` if the library is already initialized.
+    ///
+    /// ## Examples
+    /// Demonstration that only one instance can be initialized at a time:
+    /// ```
+    /// use pdfium_core::Library;
+    ///
+    /// let library = Library::init_library();
+    /// assert!(library.is_some());
+    ///
+    /// assert!(Library::init_library().is_none());
+    ///
+    /// drop(library);
+    /// assert!(Library::init_library().is_some());
+    /// ```
     pub fn init_library() -> Option<Library> {
         let already_initialized = INITIALIZED.compare_and_swap(false, true, Ordering::SeqCst);
 
         if already_initialized {
             None
         } else {
+            let config = pdfium_bindings::FPDF_LIBRARY_CONFIG_ {
+                version: 2,
+                m_pUserFontPaths: std::ptr::null::<*const i8>() as *mut _,
+                m_pIsolate: std::ptr::null::<std::ffi::c_void>() as *mut _,
+                m_v8EmbedderSlot: 0,
+                m_pPlatform: std::ptr::null::<std::ffi::c_void>() as *mut _,
+            };
             unsafe {
-                pdfium_bindings::FPDF_InitLibrary();
+                pdfium_bindings::FPDF_InitLibraryWithConfig(&config);
             }
             Some(Library(Default::default()))
         }
     }
 
     /// Get last last error code when a function fails.
-    /// 
-    /// If the previous PDFium call succeeded, the value will be `None`.
+    ///
+    /// If the previous PDFium function call succeeded, this function as undefined behavior. (From personal experience, I have found it remains unchanged.)
+    ///
+    /// ## Examples
+    /// Basic Usage:
+    /// ```
+    /// use pdfium_core::{Library, BitmapFormat, PdfiumError};
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    /// assert_eq!(library.get_last_error(), None);
+    ///
+    /// // invalid document
+    /// library.load_mem_document(&[], None);
+    /// assert_eq!(library.get_last_error(), Some(PdfiumError::BadFormat));
+    /// ```
     pub fn get_last_error(&mut self) -> Option<PdfiumError> {
         PdfiumError::from_code(unsafe { pdfium_bindings::FPDF_GetLastError() as u32 })
     }
 
     pub fn load_document(
         &mut self,
-        path: &Path,
-        password: impl Into<Vec<u8>>,
-    ) -> Result<Option<DocumentHandle<'static>>, NulError> {
-        let path = CString::new(path.to_string_lossy().to_string().into_bytes())?.as_ptr();
-        let password = CString::new(password)?.as_ptr();
-        let handle = NonNull::new(unsafe { pdfium_bindings::FPDF_LoadDocument(path, password) });
+        path: CString,
+        password: Option<CString>,
+    ) -> Option<DocumentHandle<'static>> {
+        let password = password
+            .map(|x| x.as_ptr())
+            .unwrap_or_else(|| std::ptr::null());
+        let handle =
+            NonNull::new(unsafe { pdfium_bindings::FPDF_LoadDocument(path.as_ptr(), password) });
 
-        Ok(handle.map(|handle| DocumentHandle {
+        handle.map(|handle| DocumentHandle {
             handle,
             life_time: Default::default(),
-        }))
+        })
     }
 
     pub fn load_mem_document<'a>(
         &mut self,
         buffer: &'a [u8],
-        password: impl Into<Vec<u8>>,
-    ) -> Result<Option<DocumentHandle<'a>>, NulError> {
-        let password = CString::new(password)?.as_ptr();
+        password: Option<CString>,
+    ) -> Option<DocumentHandle<'a>> {
+        let password = password
+            .map(|x| x.as_ptr())
+            .unwrap_or_else(|| std::ptr::null());
         let handle = NonNull::new(unsafe {
             pdfium_bindings::FPDF_LoadMemDocument(
                 buffer.as_ptr() as *mut c_void,
@@ -144,10 +186,10 @@ impl Library {
             )
         });
 
-        Ok(handle.map(|handle| DocumentHandle {
+        handle.map(|handle| DocumentHandle {
             handle,
             life_time: Default::default(),
-        }))
+        })
     }
 
     pub fn get_page_count(&mut self, document: &DocumentHandle) -> usize {
@@ -173,6 +215,26 @@ impl Library {
                 format as i32,
                 buffer.as_ptr() as *mut c_void,
                 height_stride as i32,
+            )
+        });
+
+        handle.map(|handle| BitmapHandle {
+            handle,
+            life_time: Default::default(),
+        })
+    }
+
+    pub fn create_bitmap<'a>(
+        &mut self,
+        width: usize,
+        height: usize,
+        use_alpha_channel: bool,
+    ) -> Option<BitmapHandle<'a>> {
+        let handle = NonNull::new(unsafe {
+            pdfium_bindings::FPDFBitmap_Create(
+                width as i32,
+                height as i32,
+                use_alpha_channel as i32,
             )
         });
 
@@ -276,6 +338,7 @@ pub enum PageOrientation {
 }
 
 /// PDFium Error Codes
+#[derive(PartialEq, Eq, Debug)]
 pub enum PdfiumError {
     /// Unknown error.
     Unknown = pdfium_bindings::FPDF_ERR_UNKNOWN as isize,
@@ -376,7 +439,7 @@ mod tests {
     fn page_count() {
         let _guard = TEST_LOCK.lock().unwrap();
         let mut library = Library::init_library().unwrap();
-        let document = library.load_mem_document(DUMMY_PDF, []).unwrap().unwrap();
+        let document = library.load_mem_document(DUMMY_PDF, None).unwrap();
 
         assert_eq!(library.get_page_count(&document), 1);
     }
@@ -385,7 +448,7 @@ mod tests {
     fn page_dimensions() {
         let _guard = TEST_LOCK.lock().unwrap();
         let mut library = Library::init_library().unwrap();
-        let document = library.load_mem_document(DUMMY_PDF, []).unwrap().unwrap();
+        let document = library.load_mem_document(DUMMY_PDF, None).unwrap();
         let page = library.load_page(&document, 0).unwrap();
 
         assert_eq!(library.get_page_width(&page), 595.0);
@@ -396,7 +459,7 @@ mod tests {
     fn render() {
         let _guard = TEST_LOCK.lock().unwrap();
         let mut library = Library::init_library().unwrap();
-        let document = library.load_mem_document(DUMMY_PDF, []).unwrap().unwrap();
+        let document = library.load_mem_document(DUMMY_PDF, None).unwrap();
         let page = library.load_page(&document, 0).unwrap();
 
         let width = library.get_page_width(&page).round() as usize;
@@ -426,7 +489,7 @@ mod tests {
             0,
         );
 
-        assert_eq!(library.get_last_error(), 0);
+        assert!(library.get_last_error().is_none());
 
         drop(bitmap);
 
