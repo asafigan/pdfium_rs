@@ -5,68 +5,68 @@
 //! ```no_run
 //! use pdfium_core::Library;
 //! use std::path::Path;
-//! 
+//!
 //! let mut library = Library::init_library().unwrap();
-//! 
+//!
 //! // empty password
 //! let password = [];
 //! let document_handle = library
 //!     .load_document(Path::new("example.pdf"), password)
 //!     .unwrap()
 //!     .unwrap();
-//! 
+//!
 //! println!("{}", library.get_page_count(&document_handle));
 //! ```
-//! 
+//!
 //! The first thing to notice is that all methods are implemented on the [`Library`] struct.
 //! This is because of two reasons: the PDFium library must be initialize before using it and
 //! it is not thread safe. Modeling the PDFium library as a resource ensures that is must be initialized
 //! before being used. Also all methods require a mutable reference to the library to ensure that
 //! synchronization has occurred before calling any method in the library.
-//! 
+//!
 //! ## Initializing the library
 //! Another thing to notice is that [`Library::init_library()`] returns an option. This is because PDFium can only
 //! be initialized once per process without being uninitialized first. The library will be
 //! uninitialized when the Library struct is dropped.
-//! 
+//!
 //! For example:
 //! ```
 //! use pdfium_core::Library;
-//! 
+//!
 //! let library = Library::init_library();
 //! assert!(library.is_some());
-//! 
+//!
 //! assert!(Library::init_library().is_none());
-//! 
+//!
 //! drop(library);
 //! assert!(Library::init_library().is_some());
 //! ```
-//! 
+//!
 //! ## Handles
 //! `pdfium_core` uses handles that wrap non-null pointers in order to manage the resources
 //! used by PDFium. All of the handles will track the correct lifetimes of the underlying resources
 //! and will clean up these resources when they are dropped.
-//! 
+//!
 //! For example:
 //! ```no_run
 //! let mut library = Library::init_library();
-//! 
+//!
 //! use pdfium_core::Library;
 //! use std::path::Path;
-//! 
+//!
 //! let mut library = Library::init_library().unwrap();
-//! 
+//!
 //! let document_handle = library
 //!     .load_document(Path::new("example.pdf"), [])
 //!     .unwrap()
 //!     .unwrap();
-//! 
+//!
 //! // load first page
 //! let page_handle = library.load_page(&document_handle, 0).unwrap();
-//! 
-//! // can't drop the document_handle before the page_handle because 
+//!
+//! // can't drop the document_handle before the page_handle because
 //! // the page can't outlive its parent document.
-//! 
+//!
 //! // uncommenting the next line would cause a compile time error.
 //! // drop(document_handle);
 //! drop(page_handle);
@@ -78,6 +78,9 @@ use std::path::Path;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, Ordering};
 
+/// A properly initialized instance of the PDFium library.
+/// 
+/// The PDFium library is not thread safe so there can only be one instance per process.
 pub struct Library(PhantomData<()>);
 
 static INITIALIZED: AtomicBool = AtomicBool::new(false);
@@ -105,8 +108,11 @@ impl Library {
         }
     }
 
-    pub fn get_last_error(&mut self) -> u64 {
-        unsafe { pdfium_bindings::FPDF_GetLastError() }
+    /// Get last last error code when a function fails.
+    /// 
+    /// If the previous PDFium call succeeded, the value will be `None`.
+    pub fn get_last_error(&mut self) -> Option<PdfiumError> {
+        PdfiumError::from_code(unsafe { pdfium_bindings::FPDF_GetLastError() as u32 })
     }
 
     pub fn load_document(
@@ -267,6 +273,37 @@ pub enum PageOrientation {
     Flip = 2,
     /// rotated 90 degrees counter-clockwise
     CounterClockwise = 3,
+}
+
+/// PDFium Error Codes
+pub enum PdfiumError {
+    /// Unknown error.
+    Unknown = pdfium_bindings::FPDF_ERR_UNKNOWN as isize,
+    /// File not found or could not be opened.
+    BadFile = pdfium_bindings::FPDF_ERR_FILE as isize,
+    /// File not in PDF format or corrupted.
+    BadFormat = pdfium_bindings::FPDF_ERR_FORMAT as isize,
+    /// Password required or incorrect password.
+    BadPassword = pdfium_bindings::FPDF_ERR_PASSWORD as isize,
+    /// Unsupported security scheme.
+    UnsupportedSecurityScheme = pdfium_bindings::FPDF_ERR_SECURITY as isize,
+    /// Page not found or content error.
+    BadPage = pdfium_bindings::FPDF_ERR_PAGE as isize,
+}
+
+impl PdfiumError {
+    fn from_code(code: u32) -> Option<PdfiumError> {
+        match code {
+            pdfium_bindings::FPDF_ERR_SUCCESS => None,
+            pdfium_bindings::FPDF_ERR_UNKNOWN => Some(PdfiumError::Unknown),
+            pdfium_bindings::FPDF_ERR_FILE => Some(PdfiumError::BadFile),
+            pdfium_bindings::FPDF_ERR_FORMAT => Some(PdfiumError::BadFormat),
+            pdfium_bindings::FPDF_ERR_PASSWORD => Some(PdfiumError::BadPassword),
+            pdfium_bindings::FPDF_ERR_SECURITY => Some(PdfiumError::UnsupportedSecurityScheme),
+            pdfium_bindings::FPDF_ERR_PAGE => Some(PdfiumError::BadPage),
+            _ => Some(PdfiumError::Unknown),
+        }
+    }
 }
 
 pub struct DocumentHandle<'a> {
