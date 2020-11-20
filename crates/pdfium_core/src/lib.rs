@@ -18,14 +18,14 @@
 //! println!("{}", library.get_page_count(&document_handle));
 //! ```
 //! 
-//! The first thing to notice is that all methods are implemented on the `Library` struct.
+//! The first thing to notice is that all methods are implemented on the [`Library`] struct.
 //! This is because of two reasons: the PDFium library must be initialize before using it and
 //! it is not thread safe. Modeling the PDFium library as a resource ensures that is must be initialized
 //! before being used. Also all methods require a mutable reference to the library to ensure that
 //! synchronization has occurred before calling any method in the library.
 //! 
 //! ## Initializing the library
-//! Another thing to notice is that `Library::init_library()` returns an option. This is because PDFium can only
+//! Another thing to notice is that [`Library::init_library()`] returns an option. This is because PDFium can only
 //! be initialized once per process without being uninitialized first. The library will be
 //! uninitialized when the Library struct is dropped.
 //! 
