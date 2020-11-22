@@ -182,7 +182,7 @@ impl Library {
     /// use std::ffi::CString;
     ///
     /// let mut library = Library::init_library().unwrap();
-    /// 
+    ///
     /// let path = CString::new("dummy.pdf").unwrap();
     /// let password = CString::new("test").unwrap();
     /// let document_handle = library.load_document(&path, Some(&password));
@@ -198,10 +198,12 @@ impl Library {
         let handle =
             NonNull::new(unsafe { pdfium_bindings::FPDF_LoadDocument(path.as_ptr(), password) });
 
-        handle.map(|handle| DocumentHandle {
-            handle,
-            life_time: Default::default(),
-        }).ok_or_else(|| self.last_error())
+        handle
+            .map(|handle| DocumentHandle {
+                handle,
+                life_time: Default::default(),
+            })
+            .ok_or_else(|| self.last_error())
     }
 
     /// Open and load a PDF document from memory.
@@ -214,7 +216,7 @@ impl Library {
     /// # static DUMMY_PASSWORD_PDF: &'static [u8] = include_bytes!("../../../test_assets/password.pdf");
     ///
     /// let mut library = Library::init_library().unwrap();
-    /// 
+    ///
     /// let password = CString::new("test").unwrap();
     /// let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, Some(&password));
     /// assert!(document_handle.is_ok());
@@ -620,7 +622,7 @@ mod tests {
 
     mod load_document {
         use super::*;
-        use std::path::{PathBuf, Path};
+        use std::path::{Path, PathBuf};
 
         fn cstring_from_path(path: PathBuf) -> CString {
             CString::new(path.to_str().unwrap()).unwrap()
@@ -665,7 +667,8 @@ mod tests {
             let _guard = TEST_LOCK.lock().map_or_else(|x| x.into_inner(), |x| x);
             let mut library = Library::init_library().unwrap();
             let password = CString::new("test").unwrap();
-            let document_handle = library.load_document(&dummy_password_pdf_path(), Some(&password));
+            let document_handle =
+                library.load_document(&dummy_password_pdf_path(), Some(&password));
             assert!(document_handle.is_ok());
         }
 
@@ -674,7 +677,8 @@ mod tests {
             let _guard = TEST_LOCK.lock().map_or_else(|x| x.into_inner(), |x| x);
             let mut library = Library::init_library().unwrap();
             let password = CString::new("wrong password").unwrap();
-            let document_handle = library.load_document(&dummy_password_pdf_path(), Some(&password));
+            let document_handle =
+                library.load_document(&dummy_password_pdf_path(), Some(&password));
             assert_eq!(document_handle.unwrap_err(), PdfiumError::BadPassword);
         }
 
