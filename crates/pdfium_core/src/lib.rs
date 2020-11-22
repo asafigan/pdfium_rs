@@ -145,6 +145,13 @@ impl Library {
         PdfiumError::from_code(unsafe { pdfium_bindings::FPDF_GetLastError() as u32 })
     }
 
+    /// Get last last error code when a function fails, if `None` default to [`Unknown`](PdfiumError::Unknown).
+    ///
+    /// If the previous PDFium function call succeeded, this function has undefined behavior. (From personal experience, I have found it remains unchanged.)
+    fn last_error(&mut self) -> PdfiumError {
+        self.get_last_error().unwrap_or(PdfiumError::Unknown)
+    }
+
     pub fn load_document(
         &mut self,
         path: &CStr,
@@ -226,7 +233,7 @@ impl Library {
                 handle,
                 life_time: Default::default(),
             })
-            .ok_or_else(|| self.get_last_error().unwrap_or(PdfiumError::Unknown))
+            .ok_or_else(|| self.last_error())
     }
 
     pub fn get_page_count(&mut self, document: &DocumentHandle) -> usize {
