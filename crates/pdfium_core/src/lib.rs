@@ -55,8 +55,9 @@
 //!
 //! let mut library = Library::init_library().unwrap();
 //!
+//! let path = CString::new("example.pdf").unwrap();
 //! let document_handle = library
-//!     .load_document(CString::new("example.pdf").unwrap(), None)
+//!     .load_document(&path, None)
 //!     .unwrap();
 //!
 //! // load first page
@@ -157,8 +158,8 @@ impl Library {
 
     pub fn load_document(
         &mut self,
-        path: CString,
-        password: Option<CString>,
+        path: &CStr,
+        password: Option<&CStr>,
     ) -> Option<DocumentHandle<'static>> {
         let password = password.map(|x| x.as_ptr()).unwrap_or_else(std::ptr::null);
 
@@ -174,7 +175,7 @@ impl Library {
     pub fn load_mem_document<'a>(
         &mut self,
         buffer: &'a [u8],
-        password: Option<CString>,
+        password: Option<&CStr>,
     ) -> Option<DocumentHandle<'a>> {
         let password = password.map(|x| x.as_ptr()).unwrap_or_else(std::ptr::null);
 
