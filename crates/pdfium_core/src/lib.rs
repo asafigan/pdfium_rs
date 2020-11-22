@@ -10,8 +10,9 @@
 //!
 //! // empty password
 //! let password = None;
+//! let path = CString::new("example.pdf").unwrap();
 //! let document_handle = library
-//!     .load_document(CString::new("example.pdf").unwrap(), password)
+//!     .load_document(&path, password)
 //!     .unwrap();
 //!
 //! println!("{}", library.get_page_count(&document_handle));
@@ -73,7 +74,7 @@
 
 #![allow(clippy::too_many_arguments)]
 
-use std::ffi::{c_void, CString};
+use std::ffi::{c_void, CStr};
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -172,6 +173,45 @@ impl Library {
         })
     }
 
+    /// Open and load a PDF document from memory.
+    ///
+    /// Returns a handle to the loaded document, or `None` on failure.
+    /// If this function fails, you can use [`get_last_error`] to get
+    /// the reason why it failed.
+    ///
+    /// The encoding for `password` can be either UTF-8 or Latin-1. PDFs,
+    /// depending on the security handler revision, will only accept one or
+    /// the other encoding. If password's encoding and the PDF's expected
+    /// encoding do not match, load_mem_document will automatically
+    /// convert |password| to the other encoding.
+    ///
+    /// Examples:
+    /// Load without password:
+    /// ```
+    /// use pdfium_core::Library;
+    /// # static DUMMY_PDF: &'static [u8] = include_bytes!("../../../test_assets/dummy.pdf");
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let document_handle = library.load_mem_document(DUMMY_PDF, None);
+    ///
+    /// assert!(document_handle.is_some());
+    /// ```
+    ///
+    /// Load with password:
+    /// ```
+    /// use pdfium_core::Library;
+    /// use std::ffi::CString;
+    /// # static DUMMY_PASSWORD_PDF: &'static [u8] = include_bytes!("../../../test_assets/password.pdf");
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let password = CString::new("test").unwrap();
+    ///
+    /// let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, Some(&password));
+    ///
+    /// assert!(document_handle.is_some());
+    /// ```
     pub fn load_mem_document<'a>(
         &mut self,
         buffer: &'a [u8],
