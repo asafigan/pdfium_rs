@@ -212,6 +212,22 @@ impl Library {
     ///
     /// assert!(document_handle.is_some());
     /// ```
+    /// 
+    /// Load with incorrect password:
+    /// ```
+    /// use pdfium_core::{Library, PdfiumError};
+    /// use std::ffi::CString;
+    /// # static DUMMY_PASSWORD_PDF: &'static [u8] = include_bytes!("../../../test_assets/password.pdf");
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let password = CString::new("wrong password").unwrap();
+    ///
+    /// let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, Some(&password));
+    ///
+    /// assert!(document_handle.is_none());
+    /// assert_eq!(library.get_last_error(), Some(PdfiumError::BadPassword));
+    /// ```
     pub fn load_mem_document<'a>(
         &mut self,
         buffer: &'a [u8],
