@@ -1,4 +1,4 @@
-//! The PDFium library is not safe so all types in `pdfium_rs` are `!Send` and `!Sync`.
+//! The PDFium library is not thread safe so all types in `pdfium_rs` are `!Send` and `!Sync`.
 //! Trying to use these types across threads will not compile.
 //!
 //! Example:
