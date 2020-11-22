@@ -75,6 +75,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use std::ffi::{c_void, CStr};
+use std::fmt;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -139,21 +140,8 @@ impl Library {
 
     /// Get last last error code when a function fails.
     ///
-    /// If the previous PDFium function call succeeded, this function as undefined behavior. (From personal experience, I have found it remains unchanged.)
-    ///
-    /// ## Examples
-    /// Basic Usage:
-    /// ```
-    /// use pdfium_core::{Library, BitmapFormat, PdfiumError};
-    ///
-    /// let mut library = Library::init_library().unwrap();
-    /// assert_eq!(library.get_last_error(), None);
-    ///
-    /// // invalid document
-    /// assert!(library.load_mem_document(&[], None).is_none());
-    /// assert_eq!(library.get_last_error(), Some(PdfiumError::BadFormat));
-    /// ```
-    pub fn get_last_error(&mut self) -> Option<PdfiumError> {
+    /// If the previous PDFium function call succeeded, this function has undefined behavior. (From personal experience, I have found it remains unchanged.)
+    fn get_last_error(&mut self) -> Option<PdfiumError> {
         PdfiumError::from_code(unsafe { pdfium_bindings::FPDF_GetLastError() as u32 })
     }
 
@@ -175,64 +163,54 @@ impl Library {
 
     /// Open and load a PDF document from memory.
     ///
-    /// Returns a handle to the loaded document, or `None` on failure.
-    /// If this function fails, you can use [`get_last_error`] to get
-    /// the reason why it failed.
-    ///
     /// The encoding for `password` can be either UTF-8 or Latin-1. PDFs,
     /// depending on the security handler revision, will only accept one or
-    /// the other encoding. If password's encoding and the PDF's expected
-    /// encoding do not match, load_mem_document will automatically
-    /// convert |password| to the other encoding.
+    /// the other encoding. If `password`'s encoding and the PDF's expected
+    /// encoding do not match, it will automatically
+    /// convert `password` to the other encoding.
     ///
-    /// Examples:
-    /// Load without password:
-    /// ```
-    /// use pdfium_core::Library;
-    /// # static DUMMY_PDF: &'static [u8] = include_bytes!("../../../test_assets/dummy.pdf");
+    /// `password` is ignored if the document is not encrypted.
     ///
-    /// let mut library = Library::init_library().unwrap();
+    /// ## Errors
+    /// This function will return an error under a number of different circumstances.
+    /// Some of these error conditions are listed here, together with their [`PdfiumError`].
+    /// The mapping to [`PdfiumError`]s is not part of the compatibility contract of the function,
+    /// especially the [`Unknown`](PdfiumError::Unknown) kind might change to more specific kinds in the future.
     ///
-    /// let document_handle = library.load_mem_document(DUMMY_PDF, None);
+    /// - [`BadPassword`](PdfiumError::BadPassword): A password is required but there is no provided password.
+    /// - [`BadPassword`](PdfiumError::BadPassword): The provided password is wrong.
+    /// - [`BadPassword`](PdfiumError::BadFormat): The buffer contains a improperly formatted pdf.
+    /// - [`BadPassword`](PdfiumError::BadFormat): The buffer contains no data.
+    /// - [`UnsupportedSecurityScheme`](PdfiumError::UnsupportedSecurityScheme): The document is protected by an unsupported security schema.
     ///
-    /// assert!(document_handle.is_some());
-    /// ```
-    ///
-    /// Load with password:
-    /// ```
-    /// use pdfium_core::Library;
-    /// use std::ffi::CString;
-    /// # static DUMMY_PASSWORD_PDF: &'static [u8] = include_bytes!("../../../test_assets/password.pdf");
-    ///
-    /// let mut library = Library::init_library().unwrap();
-    ///
-    /// let password = CString::new("test").unwrap();
-    ///
-    /// let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, Some(&password));
-    ///
-    /// assert!(document_handle.is_some());
-    /// ```
-    /// 
-    /// Load with incorrect password:
+    /// ## Examples
     /// ```
     /// use pdfium_core::{Library, PdfiumError};
     /// use std::ffi::CString;
+    /// # static DUMMY_PDF: &'static [u8] = include_bytes!("../../../test_assets/dummy.pdf");
     /// # static DUMMY_PASSWORD_PDF: &'static [u8] = include_bytes!("../../../test_assets/password.pdf");
     ///
     /// let mut library = Library::init_library().unwrap();
     ///
-    /// let password = CString::new("wrong password").unwrap();
+    /// // without password
+    /// let document_handle = library.load_mem_document(DUMMY_PDF, None);
+    /// assert!(document_handle.is_ok());
     ///
+    /// // with password
+    /// let password = CString::new("test").unwrap();
     /// let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, Some(&password));
+    /// assert!(document_handle.is_ok());
     ///
-    /// assert!(document_handle.is_none());
-    /// assert_eq!(library.get_last_error(), Some(PdfiumError::BadPassword));
+    /// // with wrong password
+    /// let password = CString::new("wrong password").unwrap();
+    /// let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, Some(&password));
+    /// assert_eq!(document_handle.unwrap_err(), PdfiumError::BadPassword);
     /// ```
     pub fn load_mem_document<'a>(
         &mut self,
         buffer: &'a [u8],
         password: Option<&CStr>,
-    ) -> Option<DocumentHandle<'a>> {
+    ) -> Result<DocumentHandle<'a>, PdfiumError> {
         let password = password.map(|x| x.as_ptr()).unwrap_or_else(std::ptr::null);
 
         let handle = NonNull::new(unsafe {
@@ -243,10 +221,12 @@ impl Library {
             )
         });
 
-        handle.map(|handle| DocumentHandle {
-            handle,
-            life_time: Default::default(),
-        })
+        handle
+            .map(|handle| DocumentHandle {
+                handle,
+                life_time: Default::default(),
+            })
+            .ok_or_else(|| self.get_last_error().unwrap_or(PdfiumError::Unknown))
     }
 
     pub fn get_page_count(&mut self, document: &DocumentHandle) -> usize {
@@ -436,6 +416,12 @@ impl<'a> Drop for DocumentHandle<'a> {
         unsafe {
             pdfium_bindings::FPDF_CloseDocument(self.handle.as_ptr());
         }
+    }
+}
+
+impl<'a> fmt::Debug for DocumentHandle<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "DocumentHandle")
     }
 }
 

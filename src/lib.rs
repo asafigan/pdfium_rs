@@ -13,7 +13,7 @@
 //! });
 //! ```
 
-pub use pdfium_core::{BitmapFormat, PageOrientation};
+pub use pdfium_core::{BitmapFormat, PageOrientation, PdfiumError};
 use std::cell::RefCell;
 use std::rc::Rc;
 
@@ -28,7 +28,7 @@ impl Library {
         })
     }
 
-    pub fn document_from_bytes<'a>(&self, buffer: &'a [u8]) -> Option<Document<'a>> {
+    pub fn document_from_bytes<'a>(&self, buffer: &'a [u8]) -> Result<Document<'a>, PdfiumError> {
         let handle = self.core.borrow_mut().load_mem_document(buffer, None);
 
         handle.map(|handle| Document {
