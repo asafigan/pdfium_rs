@@ -244,6 +244,22 @@ impl Library {
             .ok_or_else(|| self.last_error())
     }
 
+    /// Get total number of pages in the document.
+    /// ## Examples
+    /// ```
+    /// use pdfium_core::Library;
+    /// use std::ffi::CString;
+    /// # static DUMMY_PDF: &'static [u8] = include_bytes!("../../../test_assets/dummy.pdf");
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let document_handle = library
+    ///     .load_mem_document(DUMMY_PDF, None)
+    ///     .unwrap();
+    ///
+    /// let page_count = library.get_page_count(&document_handle);
+    /// assert_eq!(page_count, 1);
+    /// ```
     pub fn get_page_count(&mut self, document: &DocumentHandle) -> usize {
         unsafe { pdfium_bindings::FPDF_GetPageCount(document.handle.as_ptr()) as usize }
     }
@@ -270,11 +286,12 @@ impl Library {
             )
         });
 
-        handle.map(|handle| BitmapHandle {
-            handle,
-            life_time: Default::default(),
-        })
-        .ok_or_else(|| self.last_error())
+        handle
+            .map(|handle| BitmapHandle {
+                handle,
+                life_time: Default::default(),
+            })
+            .ok_or_else(|| self.last_error())
     }
 
     pub fn create_bitmap<'a>(
@@ -291,11 +308,12 @@ impl Library {
             )
         });
 
-        handle.map(|handle| BitmapHandle {
-            handle,
-            life_time: Default::default(),
-        })
-        .ok_or_else(|| self.last_error())
+        handle
+            .map(|handle| BitmapHandle {
+                handle,
+                life_time: Default::default(),
+            })
+            .ok_or_else(|| self.last_error())
     }
 
     pub fn load_page<'a>(
@@ -307,11 +325,12 @@ impl Library {
             pdfium_bindings::FPDF_LoadPage(document.handle.as_ptr(), index as i32)
         });
 
-        handle.map(|handle| PageHandle {
-            handle,
-            life_time: Default::default(),
-        })
-        .ok_or_else(|| self.last_error())
+        handle
+            .map(|handle| PageHandle {
+                handle,
+                life_time: Default::default(),
+            })
+            .ok_or_else(|| self.last_error())
     }
 
     pub fn get_page_width(&mut self, page: &PageHandle) -> f32 {
