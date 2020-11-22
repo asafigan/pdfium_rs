@@ -186,8 +186,8 @@ impl Library {
     ///
     /// - [`BadPassword`](PdfiumError::BadPassword): A password is required but there is no provided password.
     /// - [`BadPassword`](PdfiumError::BadPassword): The provided password is wrong.
-    /// - [`BadPassword`](PdfiumError::BadFormat): The buffer contains a improperly formatted pdf.
-    /// - [`BadPassword`](PdfiumError::BadFormat): The buffer contains no data.
+    /// - [`BadFormat`](PdfiumError::BadFormat): The buffer contains a improperly formatted pdf.
+    /// - [`BadFormat`](PdfiumError::BadFormat): The buffer contains no data.
     /// - [`UnsupportedSecurityScheme`](PdfiumError::UnsupportedSecurityScheme): The document is protected by an unsupported security schema.
     ///
     /// ## Examples
