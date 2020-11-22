@@ -192,26 +192,15 @@ impl Library {
     ///
     /// ## Examples
     /// ```
-    /// use pdfium_core::{Library, PdfiumError};
+    /// use pdfium_core::Library;
     /// use std::ffi::CString;
-    /// # static DUMMY_PDF: &'static [u8] = include_bytes!("../../../test_assets/dummy.pdf");
     /// # static DUMMY_PASSWORD_PDF: &'static [u8] = include_bytes!("../../../test_assets/password.pdf");
     ///
     /// let mut library = Library::init_library().unwrap();
-    ///
-    /// // without password
-    /// let document_handle = library.load_mem_document(DUMMY_PDF, None);
-    /// assert!(document_handle.is_ok());
-    ///
-    /// // with password
+    /// 
     /// let password = CString::new("test").unwrap();
     /// let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, Some(&password));
     /// assert!(document_handle.is_ok());
-    ///
-    /// // with wrong password
-    /// let password = CString::new("wrong password").unwrap();
-    /// let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, Some(&password));
-    /// assert_eq!(document_handle.unwrap_err(), PdfiumError::BadPassword);
     /// ```
     pub fn load_mem_document<'a>(
         &mut self,
@@ -470,7 +459,10 @@ static TEST_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
 mod tests {
     use super::*;
 
+    use std::ffi::CString;
+
     static DUMMY_PDF: &'static [u8] = include_bytes!("../../../test_assets/dummy.pdf");
+    static DUMMY_PASSWORD_PDF: &'static [u8] = include_bytes!("../../../test_assets/password.pdf");
 
     #[test]
     fn only_one_library_at_a_time() {
@@ -539,11 +531,73 @@ mod tests {
             0,
         );
 
-        assert!(library.get_last_error().is_none());
-
         drop(bitmap);
 
         // There is at least one none white pixel
         assert!(buffer.iter().any(|x| *x != 0xFF));
+    }
+
+    mod load_mem_document {
+        use super::*;
+
+        #[test]
+        fn no_password() {
+            let _guard = TEST_LOCK.lock().unwrap();
+            let mut library = Library::init_library().unwrap();
+            let document_handle = library.load_mem_document(DUMMY_PDF, None);
+
+            assert!(document_handle.is_ok());
+        }
+
+        #[test]
+        fn password() {
+            let _guard = TEST_LOCK.lock().unwrap();
+            let mut library = Library::init_library().unwrap();
+            let password = CString::new("test").unwrap();
+            let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, Some(&password));
+            assert!(document_handle.is_ok());
+        }
+
+        #[test]
+        fn bad_password() {
+            let _guard = TEST_LOCK.lock().unwrap();
+            let mut library = Library::init_library().unwrap();
+            let password = CString::new("wrong password").unwrap();
+            let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, Some(&password));
+            assert_eq!(document_handle.unwrap_err(), PdfiumError::BadPassword);
+        }
+
+        #[test]
+        fn password_missing() {
+            let _guard = TEST_LOCK.lock().unwrap();
+            let mut library = Library::init_library().unwrap();
+            let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, None);
+            assert_eq!(document_handle.unwrap_err(), PdfiumError::BadPassword);
+        }
+
+        #[test]
+        fn unneeded_password() {
+            let _guard = TEST_LOCK.lock().unwrap();
+            let mut library = Library::init_library().unwrap();
+            let password = CString::new("wrong password").unwrap();
+            let document_handle = library.load_mem_document(DUMMY_PDF, Some(&password));
+            assert!(document_handle.is_ok());
+        }
+
+        #[test]
+        fn no_data() {
+            let _guard = TEST_LOCK.lock().unwrap();
+            let mut library = Library::init_library().unwrap();
+            let document_handle = library.load_mem_document(&[], None);
+            assert_eq!(document_handle.unwrap_err(), PdfiumError::BadFormat);
+        }
+
+        #[test]
+        fn bad_data() {
+            let _guard = TEST_LOCK.lock().unwrap();
+            let mut library = Library::init_library().unwrap();
+            let document_handle = library.load_mem_document(&[0; 255], None);
+            assert_eq!(document_handle.unwrap_err(), PdfiumError::BadFormat);
+        }
     }
 }
