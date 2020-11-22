@@ -44,7 +44,7 @@ impl Library {
         height_stride: usize,
         format: BitmapFormat,
         buffer: &'a mut [u8],
-    ) -> Option<Bitmap<'a>> {
+    ) -> Result<Bitmap<'a>, PdfiumError> {
         let handle = self.core.borrow_mut().create_external_bitmap(
             width,
             height,
@@ -70,7 +70,7 @@ impl<'a> Document<'a> {
         self.core.borrow_mut().get_page_count(&self.handle)
     }
 
-    pub fn page(&self, index: usize) -> Option<Page> {
+    pub fn page(&self, index: usize) -> Result<Page, PdfiumError> {
         let handle = self.core.borrow_mut().load_page(&self.handle, index);
 
         handle.map(|handle| Page {

@@ -255,9 +255,9 @@ impl Library {
         format: BitmapFormat,
         buffer: &'a mut [u8],
         height_stride: usize,
-    ) -> Option<BitmapHandle<'a>> {
+    ) -> Result<BitmapHandle<'a>, PdfiumError> {
         if buffer.len() < height * height_stride {
-            return None;
+            return Err(PdfiumError::BadFormat);
         }
 
         let handle = NonNull::new(unsafe {
@@ -274,6 +274,7 @@ impl Library {
             handle,
             life_time: Default::default(),
         })
+        .ok_or_else(|| self.last_error())
     }
 
     pub fn create_bitmap<'a>(
@@ -281,7 +282,7 @@ impl Library {
         width: usize,
         height: usize,
         use_alpha_channel: bool,
-    ) -> Option<BitmapHandle<'a>> {
+    ) -> Result<BitmapHandle<'a>, PdfiumError> {
         let handle = NonNull::new(unsafe {
             pdfium_bindings::FPDFBitmap_Create(
                 width as i32,
@@ -294,13 +295,14 @@ impl Library {
             handle,
             life_time: Default::default(),
         })
+        .ok_or_else(|| self.last_error())
     }
 
     pub fn load_page<'a>(
         &mut self,
         document: &'a DocumentHandle,
         index: usize,
-    ) -> Option<PageHandle<'a>> {
+    ) -> Result<PageHandle<'a>, PdfiumError> {
         let handle = NonNull::new(unsafe {
             pdfium_bindings::FPDF_LoadPage(document.handle.as_ptr(), index as i32)
         });
@@ -309,6 +311,7 @@ impl Library {
             handle,
             life_time: Default::default(),
         })
+        .ok_or_else(|| self.last_error())
     }
 
     pub fn get_page_width(&mut self, page: &PageHandle) -> f32 {
