@@ -190,10 +190,16 @@ impl Library {
     /// ```
     pub fn load_document(
         &mut self,
-        path: &CStr,
+        path: &Path,
         password: Option<&CStr>,
     ) -> Result<DocumentHandle<'static>, PdfiumError> {
         let password = password.map(|x| x.as_ptr()).unwrap_or_else(std::ptr::null);
+
+        #[cfg(windows)]
+        let path = to_u16s(path)?;
+
+        #[cfg(unix)]
+        let path = cstr(path)?;
 
         let handle =
             NonNull::new(unsafe { pdfium_bindings::FPDF_LoadDocument(path.as_ptr(), password) });
@@ -488,6 +494,29 @@ impl<'a> Drop for BitmapHandle<'a> {
     }
 }
 
+// Experiment with Path conversion
+use std::path::Path;
+use std::ffi::CString;
+#[cfg(windows)]
+use std::os::windows::ffi::OsStrExt;
+#[cfg(unix)]
+use std::os::unix::ffi::OsStrExt;
+
+#[cfg(windows)]
+fn to_u16s(path: &Path) -> Result<CString, PdfiumError> {
+    let maybe_path = path.encode_wide().chain(Some(0)).collect();
+    if maybe_path.iter().any(|x| x == 0) {
+        Err(PdfiumError::BadFile)
+    } else {
+        Ok(maybe_path)
+    }
+}
+
+#[cfg(unix)]
+fn cstr(path: &Path) -> Result<CString, PdfiumError> {
+    CString::new(path.as_os_str().as_bytes()).map_err(|_| PdfiumError::BadFile)
+}
+
 #[cfg(test)]
 use once_cell::sync::Lazy;
 #[cfg(test)]
@@ -644,10 +673,10 @@ mod tests {
 
     mod load_document {
         use super::*;
-        use std::path::{Path, PathBuf};
+        use std::path::{Path, PathBuf};\
 
         fn cstring_from_path(path: PathBuf) -> CString {
-            CString::new(path.to_str().unwrap()).unwrap()
+            CString::new(path.as_os_str().as_bytes()).unwrap()
         }
 
         fn test_assets_path() -> PathBuf {
