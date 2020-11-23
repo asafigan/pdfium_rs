@@ -662,8 +662,6 @@ mod tests {
         fn test_assert(filename: &str) -> CString {
             let path = test_assets_path().join(filename);
 
-            println!("{:?}", &path);
-
             cstring_from_path(path)
         }
 
