@@ -4,13 +4,13 @@
 //! Here is an example of getting the number of pages in a PDF:
 //! ```no_run
 //! use pdfium_core::Library;
-//! use std::ffi::CString;
+//! use std::path::Path;
 //!
 //! let mut library = Library::init_library().unwrap();
 //!
 //! // empty password
 //! let password = None;
-//! let path = CString::new("example.pdf").unwrap();
+//! let path = Path::new("example.pdf");
 //! let document_handle = library
 //!     .load_document(&path, password)
 //!     .unwrap();
@@ -50,13 +50,13 @@
 //! For example:
 //! ```no_run
 //! use pdfium_core::Library;
-//! use std::ffi::CString;
+//! use std::path::Path;
 //!
 //! let mut library = Library::init_library();
 //!
 //! let mut library = Library::init_library().unwrap();
 //!
-//! let path = CString::new("example.pdf").unwrap();
+//! let path = Path::new("example.pdf");
 //! let document_handle = library
 //!     .load_document(&path, None)
 //!     .unwrap();
@@ -179,11 +179,12 @@ impl Library {
     /// ## Examples
     /// ```no_run
     /// use pdfium_core::Library;
+    /// use std::path::Path;
     /// use std::ffi::CString;
     ///
     /// let mut library = Library::init_library().unwrap();
     ///
-    /// let path = CString::new("dummy.pdf").unwrap();
+    /// let path = Path::new("dummy.pdf");
     /// let password = CString::new("test").unwrap();
     /// let document_handle = library.load_document(&path, Some(&password));
     /// assert!(document_handle.is_ok());
@@ -673,11 +674,7 @@ mod tests {
 
     mod load_document {
         use super::*;
-        use std::path::{Path, PathBuf};\
-
-        fn cstring_from_path(path: PathBuf) -> CString {
-            CString::new(path.as_os_str().as_bytes()).unwrap()
-        }
+        use std::path::{Path, PathBuf};
 
         fn test_assets_path() -> PathBuf {
             Path::new(env!("CARGO_MANIFEST_DIR"))
@@ -688,17 +685,15 @@ mod tests {
                 .join("test_assets")
         }
 
-        fn test_assert(filename: &str) -> CString {
-            let path = test_assets_path().join(filename);
-
-            cstring_from_path(path)
+        fn test_assert(filename: &str) -> PathBuf {
+            test_assets_path().join(filename)
         }
 
-        fn dummy_pdf_path() -> CString {
+        fn dummy_pdf_path() -> PathBuf {
             test_assert("dummy.pdf")
         }
 
-        fn dummy_password_pdf_path() -> CString {
+        fn dummy_password_pdf_path() -> PathBuf {
             test_assert("password.pdf")
         }
 
