@@ -10,6 +10,7 @@ Using the PDFium library to render PDFs in Rust.
 - 👷‍♂️ Documentation
 - 👷‍♂️ Examples
 - 👷‍♂️ Improve Tests
+- Add CI
 - Expand API
 - Choose Licence
 - Publish on crates.io
