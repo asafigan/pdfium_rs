@@ -509,7 +509,7 @@ fn cstr(path: &Path) -> Result<CString, PdfiumError> {
 }
 
 #[cfg(test)]
-use parking_lot::{Mutex, const_mutex};
+use parking_lot::{const_mutex, Mutex};
 
 #[cfg(test)]
 static TEST_LOCK: Mutex<()> = const_mutex(());
