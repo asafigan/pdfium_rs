@@ -132,12 +132,10 @@ impl<'a> Bitmap<'a> {
 }
 
 #[cfg(test)]
-use once_cell::sync::Lazy;
-#[cfg(test)]
-use std::sync::Mutex;
+use parking_lot::{Mutex, const_mutex};
 
 #[cfg(test)]
-static TEST_LOCK: Lazy<Mutex<()>> = Lazy::new(|| Mutex::new(()));
+static TEST_LOCK: Mutex<()> = const_mutex(());
 
 #[cfg(test)]
 mod tests {
@@ -148,7 +146,7 @@ mod tests {
 
     #[test]
     fn only_one_library_at_a_time() {
-        let _guard = TEST_LOCK.lock().unwrap();
+        let _guard = TEST_LOCK.lock();
         let first = Library::init();
         assert!(first.is_some());
         let second = Library::init();
@@ -161,7 +159,7 @@ mod tests {
 
     #[test]
     fn page_count() {
-        let _guard = TEST_LOCK.lock().unwrap();
+        let _guard = TEST_LOCK.lock();
         let library = Library::init().unwrap();
         let document = library.document_from_bytes(DUMMY_PDF).unwrap();
 
@@ -170,7 +168,7 @@ mod tests {
 
     #[test]
     fn page_dimensions() {
-        let _guard = TEST_LOCK.lock().unwrap();
+        let _guard = TEST_LOCK.lock();
         let library = Library::init().unwrap();
         let document = library.document_from_bytes(DUMMY_PDF).unwrap();
         let page = document.page(0).unwrap();
@@ -181,7 +179,7 @@ mod tests {
 
     #[test]
     fn render() {
-        let _guard = TEST_LOCK.lock().unwrap();
+        let _guard = TEST_LOCK.lock();
         let library = Library::init().unwrap();
         let document = library.document_from_bytes(DUMMY_PDF).unwrap();
         let page = document.page(0).unwrap();
