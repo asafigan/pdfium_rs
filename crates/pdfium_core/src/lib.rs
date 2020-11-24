@@ -170,6 +170,7 @@ impl Library {
     ///
     /// - [`BadFile`](PdfiumError::BadFile): Unable to find file.
     /// - [`BadFile`](PdfiumError::BadFile): Unable to open file.
+    /// - [`BadFile`](PdfiumError::BadFile): Unable to convert Path to CString.
     /// - [`BadPassword`](PdfiumError::BadPassword): A password is required but there is no provided password.
     /// - [`BadPassword`](PdfiumError::BadPassword): The provided password is wrong.
     /// - [`BadFormat`](PdfiumError::BadFormat): The file contains a improperly formatted pdf.
@@ -196,10 +197,6 @@ impl Library {
     ) -> Result<DocumentHandle<'static>, PdfiumError> {
         let password = password.map(|x| x.as_ptr()).unwrap_or_else(std::ptr::null);
 
-        #[cfg(windows)]
-        let path = to_u16s(path)?;
-
-        #[cfg(unix)]
         let path = cstr(path)?;
 
         let handle =
@@ -495,22 +492,15 @@ impl<'a> Drop for BitmapHandle<'a> {
     }
 }
 
-// Experiment with Path conversion
-use std::path::Path;
 use std::ffi::CString;
-#[cfg(windows)]
-use std::os::windows::ffi::OsStrExt;
 #[cfg(unix)]
 use std::os::unix::ffi::OsStrExt;
+use std::path::Path;
 
-#[cfg(windows)]
-fn to_u16s(path: &Path) -> Result<CString, PdfiumError> {
-    let maybe_path = path.encode_wide().chain(Some(0)).collect();
-    if maybe_path.iter().any(|x| x == 0) {
-        Err(PdfiumError::BadFile)
-    } else {
-        Ok(maybe_path)
-    }
+#[cfg(not(unix))]
+fn cstr(path: &Path) -> Result<CString, PdfiumError> {
+    let path = path.to_str().ok_or(PdfiumError::BadFile)?;
+    CString::new(path).map_err(|_| PdfiumError::BadFile)
 }
 
 #[cfg(unix)]
