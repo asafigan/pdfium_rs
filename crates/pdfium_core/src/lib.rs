@@ -272,6 +272,11 @@ impl Library {
     /// `index` 0 for the first page.
     ///
     /// ## Errors
+    /// This function will return an error under a number of different circumstances.
+    /// Some of these error conditions are listed here, together with their [`PdfiumError`].
+    /// The mapping to [`PdfiumError`]s is not part of the compatibility contract of the function,
+    /// especially the [`Unknown`](PdfiumError::Unknown) kind might change to more specific kinds in the future.
+    ///
     /// - [`BadFile`](PdfiumError::BadFile): Page not found.
     /// - [`BadFile`](PdfiumError::BadFile): Content error.
     ///
@@ -362,7 +367,7 @@ impl Library {
     ///
     /// `orientation` is the orientation to render the page. See [`PageOrientation`] for more information.
     ///
-    /// `flags` is used to control advanced rendering options. `0` or [`rendering_flags::NORMAL`] for normal display. See ['rendering_flags`] module for more information.
+    /// `flags` is used to control advanced rendering options. `0` or [`rendering_flags::NORMAL`] for normal display. See [`rendering_flags`] module for more information.
     ///
     /// ## Examples
     /// Render page into external buffer:
@@ -492,7 +497,7 @@ impl Library {
     /// especially the [`Unknown`](PdfiumError::Unknown) kind might change to more specific kinds in the future.
     ///
     /// - [`BadFormat`](PdfiumError::BadFormat): `width` or `height` is 0.
-    /// - [`BadFormat`](PdfiumError::BadFormat): `buffer` is the incorrect size.
+    /// - [`BadFormat`](PdfiumError::BadFormat): `buffer` is an incorrect size.
     ///
     /// ### Examples
     /// ```
@@ -672,15 +677,14 @@ pub enum PageOrientation {
     CounterClockwise = 3,
 }
 
-/// Page rendering flags used for [`Library::render_page`].
 pub mod rendering_flags {
-    //! Page rendering flags used for [`Library::render_page`]. They can be combined with bit-wise OR.
+    //! Page rendering flags used for [`render_page_to_bitmap`](crate::Library::render_page_to_bitmap). They can be combined with bit-wise OR.
     //!
     //! ## Examples
     //! ```
     //! use pdfium_core::rendering_flags::*;
     //!
-    //! // Set flags from gray scale and printing
+    //! // Set flags for gray scale and printing
     //! let flags = GRAY_SCALE | PRINTING;
     //! ```
 
