@@ -8,10 +8,9 @@ Using the PDFium library to render PDFs in Rust.
 - 🚀 MVP (can render an image)
 - 🚀 Prevent misuse (Ensure synchronization between threads)
 - 👷‍♂️ Documentation
-- 👷‍♂️ Examples
-- 👷‍♂️ Improve Tests
-- Add CI
+- 👷‍♂️ Publish pdfium_core
 - Expand API
-- Choose Licence
+- Examples
+- Improve Tests
 - Publish on crates.io
 - Rendering Pool
