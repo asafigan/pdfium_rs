@@ -268,6 +268,80 @@ impl Library {
         unsafe { pdfium_bindings::FPDF_GetPageCount(document.handle.as_ptr()) as usize }
     }
 
+    /// Create a device independent bitmap.
+    ///
+    /// `width` and `height` are the width and height of the bitmap. Both must be greater than 0.
+    ///
+    /// `format` is the format of the bitmap. See [`BitmapFormat`] for more information.
+    ///
+    /// ## Errors
+    /// This function will return an error under a number of different circumstances.
+    /// Some of these error conditions are listed here, together with their [`PdfiumError`].
+    /// The mapping to [`PdfiumError`]s is not part of the compatibility contract of the function,
+    /// especially the [`Unknown`](PdfiumError::Unknown) kind might change to more specific kinds in the future.
+    ///
+    /// - [`BadFormat`](PdfiumError::BadFormat): `width` or `height` is 0.
+    ///
+    /// ### Examples
+    /// ```
+    /// use pdfium_core::{Library, BitmapFormat};
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let bitmap_handle = library.create_bitmap(100, 100, BitmapFormat::BGRA);
+    /// assert!(bitmap_handle.is_ok());
+    /// ```
+    pub fn create_bitmap<'a>(
+        &mut self,
+        width: usize,
+        height: usize,
+        format: BitmapFormat,
+    ) -> Result<BitmapHandle<'a>, PdfiumError> {
+        self.create_bitmap_ex(width, height, format, None, 0)
+    }
+
+    /// Create a device independent bitmap from an external buffer.
+    ///
+    /// Similar to [`Library::create_bitmap`], but the bitmap is stored in an external buffer.
+    ///
+    /// `buffer` is used to store the bytes of the buffer.
+    /// The length of `buffer` must be at least `height * height_stride`.
+    ///
+    /// `height_stride` is the number of bytes for each scan line.
+    /// A scan line is the number of bytes separating pixels in the y-direction.
+    /// This input allows for buffers that have scan lines larger than `width * number_of_bytes_per_pixel`.
+    ///
+    /// ## Errors
+    /// This function will return an error under a number of different circumstances.
+    /// Some of these error conditions are listed here, together with their [`PdfiumError`].
+    /// The mapping to [`PdfiumError`]s is not part of the compatibility contract of the function,
+    /// especially the [`Unknown`](PdfiumError::Unknown) kind might change to more specific kinds in the future.
+    ///
+    /// - [`BadFormat`](PdfiumError::BadFormat): `width` or `height` is 0.
+    /// - [`BadFormat`](PdfiumError::BadFormat): `buffer` is the incorrect size.
+    ///
+    /// ### Examples
+    /// ```
+    /// use pdfium_core::{Library, BitmapFormat};
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let width = 100;
+    /// let height = 100;
+    /// let format = BitmapFormat::BGRA;
+    /// let height_stride = width * format.bytes_per_pixel();
+    ///
+    /// let mut buffer = vec![0xFF; height * height_stride];
+    ///
+    /// let bitmap_handle = library.create_external_bitmap(
+    ///     width,
+    ///     height,
+    ///     format,
+    ///     &mut buffer,
+    ///     height_stride
+    /// );
+    /// assert!(bitmap_handle.is_ok());
+    /// ```
     pub fn create_external_bitmap<'a>(
         &mut self,
         width: usize,
@@ -276,39 +350,47 @@ impl Library {
         buffer: &'a mut [u8],
         height_stride: usize,
     ) -> Result<BitmapHandle<'a>, PdfiumError> {
-        if buffer.len() < height * height_stride {
-            return Err(PdfiumError::BadFormat);
-        }
+        self.create_bitmap_ex(width, height, format, Some(buffer), height_stride)
+    }
+
+    /// Create a device independent bitmap.
+    ///
+    /// `width` and `height` are the width and height of the bitmap. Both must be greater than 0.
+    ///
+    /// `format` is the format of the bitmap. See [`BitmapFormat`] for more information.
+    ///
+    /// `buffer` is an external buffer that holds the bitmap. If this parameter is `None`, then the a new buffer will be created.
+    ///
+    /// For external buffer only, `height_stride` is the number of bytes for each scan line.
+    /// A scan line is the number of bytes separating pixels in the y-direction.
+    /// This input allows for buffers that have scan lines larger than `width * number_of_bytes_per_pixel`.
+    fn create_bitmap_ex<'a>(
+        &mut self,
+        width: usize,
+        height: usize,
+        format: BitmapFormat,
+        buffer: Option<&'a mut [u8]>,
+        height_stride: usize,
+    ) -> Result<BitmapHandle<'a>, PdfiumError> {
+        let buffer = buffer
+            .map(|buffer| {
+                if buffer.len() < height * height_stride {
+                    Err(PdfiumError::BadFormat)
+                } else {
+                    Ok(buffer.as_ptr())
+                }
+            })
+            .transpose()?;
+
+        let buffer = buffer.unwrap_or_else(std::ptr::null);
 
         let handle = NonNull::new(unsafe {
             pdfium_bindings::FPDFBitmap_CreateEx(
                 width as i32,
                 height as i32,
                 format as i32,
-                buffer.as_ptr() as *mut c_void,
+                buffer as *mut c_void,
                 height_stride as i32,
-            )
-        });
-
-        handle
-            .map(|handle| BitmapHandle {
-                handle,
-                life_time: Default::default(),
-            })
-            .ok_or_else(|| self.last_error())
-    }
-
-    pub fn create_bitmap<'a>(
-        &mut self,
-        width: usize,
-        height: usize,
-        use_alpha_channel: bool,
-    ) -> Result<BitmapHandle<'a>, PdfiumError> {
-        let handle = NonNull::new(unsafe {
-            pdfium_bindings::FPDFBitmap_Create(
-                width as i32,
-                height as i32,
-                use_alpha_channel as i32,
             )
         });
 
@@ -402,6 +484,25 @@ pub enum BitmapFormat {
     BGRx = pdfium_bindings::FPDFBitmap_BGRx as isize,
     /// 4 bytes per pixel, byte order: blue, green, red, alpha.
     BGRA = pdfium_bindings::FPDFBitmap_BGRA as isize,
+}
+
+impl BitmapFormat {
+    /// Number of bytes per pixel.
+    ///
+    /// Useful when creating an external bitmap or when indexing into a bitmap's buffer.
+    /// ## Example
+    /// ```
+    /// use pdfium_core::BitmapFormat;
+    ///
+    /// assert_eq!(BitmapFormat::BGRA.bytes_per_pixel(), 4);
+    /// ```
+    pub fn bytes_per_pixel(&self) -> usize {
+        match *self {
+            BitmapFormat::GreyScale => 1,
+            BitmapFormat::BGR => 3,
+            BitmapFormat::BGRx | BitmapFormat::BGRA => 4,
+        }
+    }
 }
 
 pub enum PageOrientation {
