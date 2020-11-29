@@ -252,7 +252,6 @@ impl Library {
     /// ## Examples
     /// ```
     /// use pdfium_core::Library;
-    /// use std::ffi::CString;
     /// # static DUMMY_PDF: &'static [u8] = include_bytes!("../../../test_assets/dummy.pdf");
     ///
     /// let mut library = Library::init_library().unwrap();
@@ -266,6 +265,181 @@ impl Library {
     /// ```
     pub fn get_page_count(&mut self, document: &DocumentHandle) -> usize {
         unsafe { pdfium_bindings::FPDF_GetPageCount(document.handle.as_ptr()) as usize }
+    }
+
+    /// Load a page inside the document.
+    ///
+    /// `index` 0 for the first page.
+    ///
+    /// ## Errors
+    /// - [`BadFile`](PdfiumError::BadFile): Page not found.
+    /// - [`BadFile`](PdfiumError::BadFile): Content error.
+    ///
+    /// ## Examples
+    /// ```
+    /// use pdfium_core::Library;
+    /// # static DUMMY_PDF: &'static [u8] = include_bytes!("../../../test_assets/dummy.pdf");
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let document_handle = library
+    ///     .load_mem_document(DUMMY_PDF, None)
+    ///     .unwrap();
+    ///
+    /// let page_handle = library.load_page(&document_handle, 0);
+    /// assert!(page_handle.is_ok());
+    /// ```
+    pub fn load_page<'a>(
+        &mut self,
+        document: &'a DocumentHandle,
+        index: usize,
+    ) -> Result<PageHandle<'a>, PdfiumError> {
+        let handle = NonNull::new(unsafe {
+            pdfium_bindings::FPDF_LoadPage(document.handle.as_ptr(), index as i32)
+        });
+
+        handle
+            .map(|handle| PageHandle {
+                handle,
+                life_time: Default::default(),
+            })
+            .ok_or_else(|| self.last_error())
+    }
+
+    /// Get page width.
+    ///
+    /// Page width (excluding non-displayable area) measured in points.
+    /// One point is 1/72 inch (around 0.3528 mm).
+    /// ## Examples
+    /// ```
+    /// use pdfium_core::Library;
+    /// # static DUMMY_PDF: &'static [u8] = include_bytes!("../../../test_assets/dummy.pdf");
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let document_handle = library
+    ///     .load_mem_document(DUMMY_PDF, None)
+    ///     .unwrap();
+    ///
+    /// let page_handle = library.load_page(&document_handle, 0).unwrap();
+    /// let page_width = library.get_page_width(&page_handle);
+    /// assert_eq!(page_width, 595.0);
+    /// ```
+    pub fn get_page_width(&mut self, page: &PageHandle) -> f32 {
+        unsafe { pdfium_bindings::FPDF_GetPageWidthF(page.handle.as_ptr()) }
+    }
+
+    /// Get page height.
+    ///
+    /// Page height (excluding non-displayable area) measured in points.
+    /// One point is 1/72 inch (around 0.3528 mm).
+    /// ## Examples
+    /// ```
+    /// use pdfium_core::Library;
+    /// # static DUMMY_PDF: &'static [u8] = include_bytes!("../../../test_assets/dummy.pdf");
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let document_handle = library
+    ///     .load_mem_document(DUMMY_PDF, None)
+    ///     .unwrap();
+    ///
+    /// let page_handle = library.load_page(&document_handle, 0).unwrap();
+    /// let page_height = library.get_page_height(&page_handle);
+    /// assert_eq!(page_height, 842.0);
+    /// ```
+    pub fn get_page_height(&mut self, page: &PageHandle) -> f32 {
+        unsafe { pdfium_bindings::FPDF_GetPageHeightF(page.handle.as_ptr()) }
+    }
+
+    /// Render contents of a page to a device independent bitmap.
+    ///
+    /// `start_x` is the x-axis coordinate in the bitmap at which to place the top-left corner of the page.
+    ///
+    /// `start_y` is the y-axis coordinate in the bitmap at which to place the top-left corner of the page.
+    ///
+    /// `width` is the width to render the page in the bitmap. `height` is the height to render the page in the bitmap. These allow scaling of the page.
+    ///
+    /// `orientation` is the orientation to render the page. See [`PageOrientation`] for more information.
+    ///
+    /// `flags` is used to control advanced rendering options. `0` or [`rendering_flags::NORMAL`] for normal display. See ['rendering_flags`] module for more information.
+    ///
+    /// ## Examples
+    /// Render page into external buffer:
+    /// ```
+    /// use pdfium_core::{
+    ///     BitmapFormat,
+    ///     Library,
+    ///     PageOrientation,
+    ///     rendering_flags,
+    /// };
+    /// # static DUMMY_PDF: &'static [u8] = include_bytes!("../../../test_assets/dummy.pdf");
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let document_handle = library
+    ///     .load_mem_document(DUMMY_PDF, None)
+    ///     .unwrap();
+    ///
+    ///
+    /// let page_handle = library.load_page(&document_handle, 0).unwrap();
+    ///
+    /// let width = library.get_page_width(&page_handle) as usize;
+    /// let height = library.get_page_height(&page_handle) as usize;
+    /// let format = BitmapFormat::BGRA;
+    /// let height_stride = width * format.bytes_per_pixel();
+    ///
+    /// // create buffer of white pixels
+    /// let mut buffer = vec![0xFF; height * height_stride];
+    ///
+    /// let mut bitmap_handle = library.create_external_bitmap(
+    ///     width,
+    ///     height,
+    ///     format,
+    ///     &mut buffer,
+    ///     height_stride
+    /// ).unwrap();
+    ///
+    /// library.render_page_to_bitmap(
+    ///     &mut bitmap_handle,
+    ///     &page_handle,
+    ///     0,
+    ///     0,
+    ///     width as i32,
+    ///     height as i32,
+    ///     PageOrientation::Normal,
+    ///     rendering_flags::NORMAL,
+    /// );
+    ///
+    /// // drop the bitmap so that you can access the underlying buffer
+    /// drop(bitmap_handle);
+    ///
+    /// // there is at least one none white pixel
+    /// assert!(buffer.iter().any(|x| *x != 0xFF));
+    /// ```
+    pub fn render_page_to_bitmap(
+        &mut self,
+        bitmap: &mut BitmapHandle,
+        page: &PageHandle,
+        x: i32,
+        y: i32,
+        width: i32,
+        height: i32,
+        orientation: PageOrientation,
+        flags: i32,
+    ) {
+        unsafe {
+            pdfium_bindings::FPDF_RenderPageBitmap(
+                bitmap.handle.as_ptr(),
+                page.handle.as_ptr(),
+                x,
+                y,
+                width,
+                height,
+                orientation as i32,
+                flags,
+            );
+        }
     }
 
     /// Create a device independent bitmap.
@@ -402,56 +576,6 @@ impl Library {
             .ok_or_else(|| self.last_error())
     }
 
-    pub fn load_page<'a>(
-        &mut self,
-        document: &'a DocumentHandle,
-        index: usize,
-    ) -> Result<PageHandle<'a>, PdfiumError> {
-        let handle = NonNull::new(unsafe {
-            pdfium_bindings::FPDF_LoadPage(document.handle.as_ptr(), index as i32)
-        });
-
-        handle
-            .map(|handle| PageHandle {
-                handle,
-                life_time: Default::default(),
-            })
-            .ok_or_else(|| self.last_error())
-    }
-
-    pub fn get_page_width(&mut self, page: &PageHandle) -> f32 {
-        unsafe { pdfium_bindings::FPDF_GetPageWidthF(page.handle.as_ptr()) }
-    }
-
-    pub fn get_page_height(&mut self, page: &PageHandle) -> f32 {
-        unsafe { pdfium_bindings::FPDF_GetPageHeightF(page.handle.as_ptr()) }
-    }
-
-    pub fn render_page_bitmap(
-        &mut self,
-        bitmap: &mut BitmapHandle,
-        page: &PageHandle,
-        x: i32,
-        y: i32,
-        width: i32,
-        height: i32,
-        orientation: PageOrientation,
-        flags: i32,
-    ) {
-        unsafe {
-            pdfium_bindings::FPDF_RenderPageBitmap(
-                bitmap.handle.as_ptr(),
-                page.handle.as_ptr(),
-                x,
-                y,
-                width,
-                height,
-                orientation as i32,
-                flags,
-            );
-        }
-    }
-
     pub fn get_bitmap_width(&mut self, bitmap: &BitmapHandle) -> u32 {
         unsafe { pdfium_bindings::FPDFBitmap_GetWidth(bitmap.handle.as_ptr()) as u32 }
     }
@@ -471,6 +595,38 @@ impl Library {
     ) {
         unsafe {
             pdfium_bindings::FPDFBitmap_FillRect(bitmap.handle.as_ptr(), x, y, width, height, color)
+        }
+    }
+}
+
+/// PDFium Error Codes
+#[derive(PartialEq, Eq, Debug)]
+pub enum PdfiumError {
+    /// Unknown error.
+    Unknown = pdfium_bindings::FPDF_ERR_UNKNOWN as isize,
+    /// File not found or could not be opened.
+    BadFile = pdfium_bindings::FPDF_ERR_FILE as isize,
+    /// File not in PDF format or corrupted.
+    BadFormat = pdfium_bindings::FPDF_ERR_FORMAT as isize,
+    /// Password required or incorrect password.
+    BadPassword = pdfium_bindings::FPDF_ERR_PASSWORD as isize,
+    /// Unsupported security scheme.
+    UnsupportedSecurityScheme = pdfium_bindings::FPDF_ERR_SECURITY as isize,
+    /// Page not found or content error.
+    BadPage = pdfium_bindings::FPDF_ERR_PAGE as isize,
+}
+
+impl PdfiumError {
+    fn from_code(code: u32) -> Option<PdfiumError> {
+        match code {
+            pdfium_bindings::FPDF_ERR_SUCCESS => None,
+            pdfium_bindings::FPDF_ERR_UNKNOWN => Some(PdfiumError::Unknown),
+            pdfium_bindings::FPDF_ERR_FILE => Some(PdfiumError::BadFile),
+            pdfium_bindings::FPDF_ERR_FORMAT => Some(PdfiumError::BadFormat),
+            pdfium_bindings::FPDF_ERR_PASSWORD => Some(PdfiumError::BadPassword),
+            pdfium_bindings::FPDF_ERR_SECURITY => Some(PdfiumError::UnsupportedSecurityScheme),
+            pdfium_bindings::FPDF_ERR_PAGE => Some(PdfiumError::BadPage),
+            _ => Some(PdfiumError::Unknown),
         }
     }
 }
@@ -516,36 +672,56 @@ pub enum PageOrientation {
     CounterClockwise = 3,
 }
 
-/// PDFium Error Codes
-#[derive(PartialEq, Eq, Debug)]
-pub enum PdfiumError {
-    /// Unknown error.
-    Unknown = pdfium_bindings::FPDF_ERR_UNKNOWN as isize,
-    /// File not found or could not be opened.
-    BadFile = pdfium_bindings::FPDF_ERR_FILE as isize,
-    /// File not in PDF format or corrupted.
-    BadFormat = pdfium_bindings::FPDF_ERR_FORMAT as isize,
-    /// Password required or incorrect password.
-    BadPassword = pdfium_bindings::FPDF_ERR_PASSWORD as isize,
-    /// Unsupported security scheme.
-    UnsupportedSecurityScheme = pdfium_bindings::FPDF_ERR_SECURITY as isize,
-    /// Page not found or content error.
-    BadPage = pdfium_bindings::FPDF_ERR_PAGE as isize,
-}
+/// Page rendering flags used for [`Library::render_page`].
+pub mod rendering_flags {
+    //! Page rendering flags used for [`Library::render_page`]. They can be combined with bit-wise OR.
+    //!
+    //! ## Examples
+    //! ```
+    //! use pdfium_core::rendering_flags::*;
+    //!
+    //! // Set flags from gray scale and printing
+    //! let flags = GRAY_SCALE | PRINTING;
+    //! ```
 
-impl PdfiumError {
-    fn from_code(code: u32) -> Option<PdfiumError> {
-        match code {
-            pdfium_bindings::FPDF_ERR_SUCCESS => None,
-            pdfium_bindings::FPDF_ERR_UNKNOWN => Some(PdfiumError::Unknown),
-            pdfium_bindings::FPDF_ERR_FILE => Some(PdfiumError::BadFile),
-            pdfium_bindings::FPDF_ERR_FORMAT => Some(PdfiumError::BadFormat),
-            pdfium_bindings::FPDF_ERR_PASSWORD => Some(PdfiumError::BadPassword),
-            pdfium_bindings::FPDF_ERR_SECURITY => Some(PdfiumError::UnsupportedSecurityScheme),
-            pdfium_bindings::FPDF_ERR_PAGE => Some(PdfiumError::BadPage),
-            _ => Some(PdfiumError::Unknown),
-        }
-    }
+    /// Normal display (No flags)
+    pub const NORMAL: i32 = 0;
+
+    /// Set if annotations are to be rendered.
+    pub const ANNOTATIONS: i32 = pdfium_bindings::FPDF_ANNOT as i32;
+
+    /// Set if using text rendering optimized for LCD display. This flag will only
+    /// take effect if anti-aliasing is enabled for text.
+    pub const LCD_TEXT: i32 = pdfium_bindings::FPDF_LCD_TEXT as i32;
+
+    /// Don't use the native text output available on some platforms
+    pub const NO_NATIVE_TEXT: i32 = pdfium_bindings::FPDF_NO_NATIVETEXT as i32;
+
+    /// Grayscale output
+    pub const GRAY_SCALE: i32 = pdfium_bindings::FPDF_GRAYSCALE as i32;
+
+    /// Limit image cache size.
+    pub const LIMITED_IMAGE_CACHE: i32 = pdfium_bindings::FPDF_RENDER_LIMITEDIMAGECACHE as i32;
+
+    /// Always use halftone for image stretching.
+    pub const FORCE_HALFTONE: i32 = pdfium_bindings::FPDF_RENDER_FORCEHALFTONE as i32;
+
+    /// Render for printing.
+    pub const PRINTING: i32 = pdfium_bindings::FPDF_PRINTING as i32;
+
+    /// Set to disable anti-aliasing on text. This flag will also disable LCD
+    /// optimization for text rendering.
+    pub const NO_SMOOTH_TEXT: i32 = pdfium_bindings::FPDF_RENDER_NO_SMOOTHTEXT as i32;
+
+    /// Set to disable anti-aliasing on images.
+    pub const NO_SMOOTH_IMAGE: i32 = pdfium_bindings::FPDF_RENDER_NO_SMOOTHIMAGE as i32;
+
+    /// Set to disable anti-aliasing on paths.
+    pub const NO_SMOOTH_PATH: i32 = pdfium_bindings::FPDF_RENDER_NO_SMOOTHPATH as i32;
+
+    /// Set whether to render in a reverse Byte order, this flag is only used when
+    /// rendering to a bitmap.
+    pub const REVERSE_BYTE_ORDER: i32 = pdfium_bindings::FPDF_REVERSE_BYTE_ORDER as i32;
 }
 
 pub struct DocumentHandle<'a> {
@@ -680,7 +856,7 @@ mod tests {
             )
             .unwrap();
 
-        library.render_page_bitmap(
+        library.render_page_to_bitmap(
             &mut bitmap,
             &page,
             0,
@@ -688,7 +864,7 @@ mod tests {
             width as i32,
             height as i32,
             PageOrientation::Normal,
-            0,
+            rendering_flags::NORMAL,
         );
 
         drop(bitmap);

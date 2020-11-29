@@ -97,7 +97,7 @@ impl<'a> Page<'a> {
     pub fn render_to(&self, bitmap: &mut Bitmap) {
         let width = bitmap.width() as i32;
         let height = bitmap.height() as i32;
-        self.core.borrow_mut().render_page_bitmap(
+        self.core.borrow_mut().render_page_to_bitmap(
             &mut bitmap.handle,
             &self.handle,
             0,
