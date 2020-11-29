@@ -29,7 +29,7 @@ impl Library {
     }
 
     pub fn document_from_bytes<'a>(&self, buffer: &'a [u8]) -> Result<Document<'a>, PdfiumError> {
-        let handle = self.core.borrow_mut().load_mem_document(buffer, None);
+        let handle = self.core.borrow_mut().load_document_from_bytes(buffer, None);
 
         handle.map(|handle| Document {
             handle,
@@ -45,7 +45,7 @@ impl Library {
         format: BitmapFormat,
         buffer: &'a mut [u8],
     ) -> Result<Bitmap<'a>, PdfiumError> {
-        let handle = self.core.borrow_mut().create_external_bitmap(
+        let handle = self.core.borrow_mut().create_bitmap_from_buffer(
             width,
             height,
             format,

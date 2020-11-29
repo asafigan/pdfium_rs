@@ -82,6 +82,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A properly initialized instance of the PDFium library.
 ///
+/// Created using [`Library::init_library`].
+///
 /// The PDFium library is not thread safe so there can only be one instance per process.
 ///
 /// The PDFium library will be uninitialized when this value is dropped.
@@ -210,7 +212,7 @@ impl Library {
             .ok_or_else(|| self.last_error())
     }
 
-    /// Open and load a PDF document from memory.
+    /// Open and load a PDF document from a bytes buffer.
     ///
     /// See the [`load_document`](Library::load_document) function for more details.
     /// ## Examples
@@ -222,10 +224,10 @@ impl Library {
     /// let mut library = Library::init_library().unwrap();
     ///
     /// let password = CString::new("test").unwrap();
-    /// let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, Some(&password));
+    /// let document_handle = library.load_document_from_bytes(DUMMY_PASSWORD_PDF, Some(&password));
     /// assert!(document_handle.is_ok());
     /// ```
-    pub fn load_mem_document<'a>(
+    pub fn load_document_from_bytes<'a>(
         &mut self,
         buffer: &'a [u8],
         password: Option<&CStr>,
@@ -257,7 +259,7 @@ impl Library {
     /// let mut library = Library::init_library().unwrap();
     ///
     /// let document_handle = library
-    ///     .load_mem_document(DUMMY_PDF, None)
+    ///     .load_document_from_bytes(DUMMY_PDF, None)
     ///     .unwrap();
     ///
     /// let page_count = library.get_page_count(&document_handle);
@@ -288,7 +290,7 @@ impl Library {
     /// let mut library = Library::init_library().unwrap();
     ///
     /// let document_handle = library
-    ///     .load_mem_document(DUMMY_PDF, None)
+    ///     .load_document_from_bytes(DUMMY_PDF, None)
     ///     .unwrap();
     ///
     /// let page_handle = library.load_page(&document_handle, 0);
@@ -323,7 +325,7 @@ impl Library {
     /// let mut library = Library::init_library().unwrap();
     ///
     /// let document_handle = library
-    ///     .load_mem_document(DUMMY_PDF, None)
+    ///     .load_document_from_bytes(DUMMY_PDF, None)
     ///     .unwrap();
     ///
     /// let page_handle = library.load_page(&document_handle, 0).unwrap();
@@ -346,7 +348,7 @@ impl Library {
     /// let mut library = Library::init_library().unwrap();
     ///
     /// let document_handle = library
-    ///     .load_mem_document(DUMMY_PDF, None)
+    ///     .load_document_from_bytes(DUMMY_PDF, None)
     ///     .unwrap();
     ///
     /// let page_handle = library.load_page(&document_handle, 0).unwrap();
@@ -383,7 +385,7 @@ impl Library {
     /// let mut library = Library::init_library().unwrap();
     ///
     /// let document_handle = library
-    ///     .load_mem_document(DUMMY_PDF, None)
+    ///     .load_document_from_bytes(DUMMY_PDF, None)
     ///     .unwrap();
     ///
     ///
@@ -397,7 +399,7 @@ impl Library {
     /// // create buffer of white pixels
     /// let mut buffer = vec![0xFF; height * height_stride];
     ///
-    /// let mut bitmap_handle = library.create_external_bitmap(
+    /// let mut bitmap_handle = library.create_bitmap_from_buffer(
     ///     width,
     ///     height,
     ///     format,
@@ -512,7 +514,7 @@ impl Library {
     ///
     /// let mut buffer = vec![0xFF; height * height_stride];
     ///
-    /// let bitmap_handle = library.create_external_bitmap(
+    /// let bitmap_handle = library.create_bitmap_from_buffer(
     ///     width,
     ///     height,
     ///     format,
@@ -521,7 +523,7 @@ impl Library {
     /// );
     /// assert!(bitmap_handle.is_ok());
     /// ```
-    pub fn create_external_bitmap<'a>(
+    pub fn create_bitmap_from_buffer<'a>(
         &mut self,
         width: usize,
         height: usize,
@@ -719,6 +721,7 @@ impl PdfiumError {
     }
 }
 
+/// The format of pixels in the bitmap.
 #[repr(i32)]
 #[derive(Debug, PartialEq, Eq)]
 pub enum BitmapFormat {
@@ -761,6 +764,7 @@ impl BitmapFormat {
     }
 }
 
+/// Orientation to render the page.
 pub enum PageOrientation {
     /// normal
     Normal = 0,
@@ -823,6 +827,11 @@ pub mod rendering_flags {
     pub const REVERSE_BYTE_ORDER: i32 = pdfium_bindings::FPDF_REVERSE_BYTE_ORDER as i32;
 }
 
+/// Safe handle to PDFium Document. 
+/// 
+/// Created using [`Library::load_document`] or [`Library::load_document_from_bytes`].
+/// 
+/// Document is closed when handle is dropped.
 pub struct DocumentHandle<'a> {
     handle: NonNull<pdfium_bindings::fpdf_document_t__>,
     life_time: PhantomData<&'a [u8]>,
@@ -842,6 +851,11 @@ impl<'a> fmt::Debug for DocumentHandle<'a> {
     }
 }
 
+/// Safe handle to PDFium Page. 
+/// 
+/// Created using [`Library::load_page`].
+/// 
+/// Page is closed when handle is dropped.
 pub struct PageHandle<'a> {
     handle: NonNull<pdfium_bindings::fpdf_page_t__>,
     life_time: PhantomData<&'a [u8]>,
@@ -855,6 +869,11 @@ impl<'a> Drop for PageHandle<'a> {
     }
 }
 
+/// Safe handle to PDFium Bitmap. 
+/// 
+/// Created using [`Library::create_bitmap`] or [`Library::create_bitmap_from_buffer`].
+/// 
+/// Bitmap is destroyed when handle is dropped.
 pub struct BitmapHandle<'a> {
     handle: NonNull<pdfium_bindings::fpdf_bitmap_t__>,
     life_time: PhantomData<&'a mut [u8]>,
@@ -916,7 +935,7 @@ mod tests {
     fn page_count() {
         let _guard = TEST_LOCK.lock();
         let mut library = Library::init_library().unwrap();
-        let document = library.load_mem_document(DUMMY_PDF, None).unwrap();
+        let document = library.load_document_from_bytes(DUMMY_PDF, None).unwrap();
 
         assert_eq!(library.get_page_count(&document), 1);
     }
@@ -925,7 +944,7 @@ mod tests {
     fn page_dimensions() {
         let _guard = TEST_LOCK.lock();
         let mut library = Library::init_library().unwrap();
-        let document = library.load_mem_document(DUMMY_PDF, None).unwrap();
+        let document = library.load_document_from_bytes(DUMMY_PDF, None).unwrap();
         let page = library.load_page(&document, 0).unwrap();
 
         assert_eq!(library.get_page_width(&page), 595.0);
@@ -936,7 +955,7 @@ mod tests {
     fn render() {
         let _guard = TEST_LOCK.lock();
         let mut library = Library::init_library().unwrap();
-        let document = library.load_mem_document(DUMMY_PDF, None).unwrap();
+        let document = library.load_document_from_bytes(DUMMY_PDF, None).unwrap();
         let page = library.load_page(&document, 0).unwrap();
 
         let width = library.get_page_width(&page).round() as usize;
@@ -946,7 +965,7 @@ mod tests {
         let mut buffer: Vec<u8> = vec![0xFF; CHANNELS * width * height];
 
         let mut bitmap = library
-            .create_external_bitmap(
+            .create_bitmap_from_buffer(
                 width,
                 height,
                 BitmapFormat::BGRA,
@@ -972,14 +991,14 @@ mod tests {
         assert!(buffer.iter().any(|x| *x != 0xFF));
     }
 
-    mod load_mem_document {
+    mod load_document_from_bytes {
         use super::*;
 
         #[test]
         fn no_password() {
             let _guard = TEST_LOCK.lock();
             let mut library = Library::init_library().unwrap();
-            let document_handle = library.load_mem_document(DUMMY_PDF, None);
+            let document_handle = library.load_document_from_bytes(DUMMY_PDF, None);
 
             assert!(document_handle.is_ok());
         }
@@ -989,7 +1008,7 @@ mod tests {
             let _guard = TEST_LOCK.lock();
             let mut library = Library::init_library().unwrap();
             let password = CString::new("test").unwrap();
-            let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, Some(&password));
+            let document_handle = library.load_document_from_bytes(DUMMY_PASSWORD_PDF, Some(&password));
             assert!(document_handle.is_ok());
         }
 
@@ -998,7 +1017,7 @@ mod tests {
             let _guard = TEST_LOCK.lock();
             let mut library = Library::init_library().unwrap();
             let password = CString::new("wrong password").unwrap();
-            let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, Some(&password));
+            let document_handle = library.load_document_from_bytes(DUMMY_PASSWORD_PDF, Some(&password));
             assert_eq!(document_handle.unwrap_err(), PdfiumError::BadPassword);
         }
 
@@ -1006,7 +1025,7 @@ mod tests {
         fn password_missing() {
             let _guard = TEST_LOCK.lock();
             let mut library = Library::init_library().unwrap();
-            let document_handle = library.load_mem_document(DUMMY_PASSWORD_PDF, None);
+            let document_handle = library.load_document_from_bytes(DUMMY_PASSWORD_PDF, None);
             assert_eq!(document_handle.unwrap_err(), PdfiumError::BadPassword);
         }
 
@@ -1015,7 +1034,7 @@ mod tests {
             let _guard = TEST_LOCK.lock();
             let mut library = Library::init_library().unwrap();
             let password = CString::new("wrong password").unwrap();
-            let document_handle = library.load_mem_document(DUMMY_PDF, Some(&password));
+            let document_handle = library.load_document_from_bytes(DUMMY_PDF, Some(&password));
             assert!(document_handle.is_ok());
         }
 
@@ -1023,7 +1042,7 @@ mod tests {
         fn no_data() {
             let _guard = TEST_LOCK.lock();
             let mut library = Library::init_library().unwrap();
-            let document_handle = library.load_mem_document(&[], None);
+            let document_handle = library.load_document_from_bytes(&[], None);
             assert_eq!(document_handle.unwrap_err(), PdfiumError::BadFormat);
         }
 
@@ -1031,7 +1050,7 @@ mod tests {
         fn bad_data() {
             let _guard = TEST_LOCK.lock();
             let mut library = Library::init_library().unwrap();
-            let document_handle = library.load_mem_document(&[0; 255], None);
+            let document_handle = library.load_document_from_bytes(&[0; 255], None);
             assert_eq!(document_handle.unwrap_err(), PdfiumError::BadFormat);
         }
     }
