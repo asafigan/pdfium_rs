@@ -581,14 +581,96 @@ impl Library {
             .ok_or_else(|| self.last_error())
     }
 
+    /// Get the format of the bitmap.
+    ///
+    /// ## Examples
+    /// ```
+    /// use pdfium_core::{Library, BitmapFormat};
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let bitmap_handle = library.create_bitmap(100, 100, BitmapFormat::BGRA).unwrap();
+    ///
+    /// let format = library.get_bitmap_format(&bitmap_handle);
+    /// assert_eq!(format, BitmapFormat::BGRA);
+    /// ```
+    pub fn get_bitmap_format(&mut self, bitmap: &BitmapHandle) -> BitmapFormat {
+        let format = unsafe { pdfium_bindings::FPDFBitmap_GetFormat(bitmap.handle.as_ptr()) };
+
+        BitmapFormat::from_i32(format).unwrap()
+    }
+
+    /// Get width of a bitmap in pixels.
+    ///
+    /// ## Examples
+    /// ```
+    /// use pdfium_core::{Library, BitmapFormat};
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let bitmap_handle = library.create_bitmap(100, 100, BitmapFormat::BGRA).unwrap();
+    ///
+    /// let width = library.get_bitmap_width(&bitmap_handle);
+    /// assert_eq!(width, 100);
+    /// ```
     pub fn get_bitmap_width(&mut self, bitmap: &BitmapHandle) -> u32 {
         unsafe { pdfium_bindings::FPDFBitmap_GetWidth(bitmap.handle.as_ptr()) as u32 }
     }
 
+    /// Get height of a bitmap in pixels.
+    ///
+    /// ## Examples
+    /// ```
+    /// use pdfium_core::{Library, BitmapFormat};
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let bitmap_handle = library.create_bitmap(100, 100, BitmapFormat::BGRA).unwrap();
+    ///
+    /// let height = library.get_bitmap_height(&bitmap_handle);
+    /// assert_eq!(height, 100);
+    /// ```
     pub fn get_bitmap_height(&mut self, bitmap: &BitmapHandle) -> u32 {
         unsafe { pdfium_bindings::FPDFBitmap_GetHeight(bitmap.handle.as_ptr()) as u32 }
     }
 
+    /// Get number of bytes for each line in the bitmap buffer.
+    ///
+    /// ## Examples
+    /// ```
+    /// use pdfium_core::{Library, BitmapFormat};
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let bitmap_handle = library.create_bitmap(100, 100, BitmapFormat::BGRA).unwrap();
+    ///
+    /// let stride = library.get_bitmap_stride(&bitmap_handle);
+    /// assert_eq!(stride, 400);
+    /// ```
+    pub fn get_bitmap_stride(&mut self, bitmap: &BitmapHandle) -> usize {
+        unsafe { pdfium_bindings::FPDFBitmap_GetStride(bitmap.handle.as_ptr()) as usize }
+    }
+
+    /// Fill a rectangle in a bitmap.
+    ///
+    /// `x` and `y` make the position of the top-left pixel of the rectangle.
+    ///
+    /// `width` and `height` are the dimensions of the rectangle.
+    ///
+    /// `color` is the fill color. It will take the lowest bytes for the color.
+    /// The format of the color is dependent on the bitmap's [`BitmapFormat`].
+    ///
+    /// ## Example
+    /// Fill the bitmap with white pixels:
+    /// ```
+    /// use pdfium_core::{Library, BitmapFormat};
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let mut bitmap_handle = library.create_bitmap(100, 100, BitmapFormat::BGRA).unwrap();
+    ///
+    /// library.bitmap_fill_rect(&mut bitmap_handle, 0, 0, 100, 100, 0xFFFFFFFF);
+    /// ```
     pub fn bitmap_fill_rect(
         &mut self,
         bitmap: &mut BitmapHandle,
@@ -605,20 +687,21 @@ impl Library {
 }
 
 /// PDFium Error Codes
+#[repr(i32)]
 #[derive(PartialEq, Eq, Debug)]
 pub enum PdfiumError {
     /// Unknown error.
-    Unknown = pdfium_bindings::FPDF_ERR_UNKNOWN as isize,
+    Unknown = pdfium_bindings::FPDF_ERR_UNKNOWN as i32,
     /// File not found or could not be opened.
-    BadFile = pdfium_bindings::FPDF_ERR_FILE as isize,
+    BadFile = pdfium_bindings::FPDF_ERR_FILE as i32,
     /// File not in PDF format or corrupted.
-    BadFormat = pdfium_bindings::FPDF_ERR_FORMAT as isize,
+    BadFormat = pdfium_bindings::FPDF_ERR_FORMAT as i32,
     /// Password required or incorrect password.
-    BadPassword = pdfium_bindings::FPDF_ERR_PASSWORD as isize,
+    BadPassword = pdfium_bindings::FPDF_ERR_PASSWORD as i32,
     /// Unsupported security scheme.
-    UnsupportedSecurityScheme = pdfium_bindings::FPDF_ERR_SECURITY as isize,
+    UnsupportedSecurityScheme = pdfium_bindings::FPDF_ERR_SECURITY as i32,
     /// Page not found or content error.
-    BadPage = pdfium_bindings::FPDF_ERR_PAGE as isize,
+    BadPage = pdfium_bindings::FPDF_ERR_PAGE as i32,
 }
 
 impl PdfiumError {
@@ -636,15 +719,17 @@ impl PdfiumError {
     }
 }
 
+#[repr(i32)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum BitmapFormat {
     /// Gray scale bitmap, one byte per pixel.
-    GreyScale = pdfium_bindings::FPDFBitmap_Gray as isize,
+    GreyScale = pdfium_bindings::FPDFBitmap_Gray as i32,
     /// 3 bytes per pixel, byte order: blue, green, red.
-    BGR = pdfium_bindings::FPDFBitmap_BGR as isize,
+    BGR = pdfium_bindings::FPDFBitmap_BGR as i32,
     /// 4 bytes per pixel, byte order: blue, green, red, unused.
-    BGRx = pdfium_bindings::FPDFBitmap_BGRx as isize,
+    BGRx = pdfium_bindings::FPDFBitmap_BGRx as i32,
     /// 4 bytes per pixel, byte order: blue, green, red, alpha.
-    BGRA = pdfium_bindings::FPDFBitmap_BGRA as isize,
+    BGRA = pdfium_bindings::FPDFBitmap_BGRA as i32,
 }
 
 impl BitmapFormat {
@@ -662,6 +747,16 @@ impl BitmapFormat {
             BitmapFormat::GreyScale => 1,
             BitmapFormat::BGR => 3,
             BitmapFormat::BGRx | BitmapFormat::BGRA => 4,
+        }
+    }
+
+    fn from_i32(number: i32) -> Option<BitmapFormat> {
+        match number {
+            x if x == BitmapFormat::GreyScale as i32 => Some(BitmapFormat::GreyScale),
+            x if x == BitmapFormat::BGR as i32 => Some(BitmapFormat::BGR),
+            x if x == BitmapFormat::BGRx as i32 => Some(BitmapFormat::BGRx),
+            x if x == BitmapFormat::BGRA as i32 => Some(BitmapFormat::BGRA),
+            _ => None,
         }
     }
 }
