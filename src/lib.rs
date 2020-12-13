@@ -29,7 +29,10 @@ impl Library {
     }
 
     pub fn document_from_bytes<'a>(&self, buffer: &'a [u8]) -> Result<Document<'a>, PdfiumError> {
-        let handle = self.core.borrow_mut().load_document_from_bytes(buffer, None);
+        let handle = self
+            .core
+            .borrow_mut()
+            .load_document_from_bytes(buffer, None);
 
         handle.map(|handle| Document {
             handle,

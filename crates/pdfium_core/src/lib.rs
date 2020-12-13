@@ -827,10 +827,10 @@ pub mod rendering_flags {
     pub const REVERSE_BYTE_ORDER: i32 = pdfium_bindings::FPDF_REVERSE_BYTE_ORDER as i32;
 }
 
-/// Safe handle to PDFium Document. 
-/// 
+/// Safe handle to PDFium Document.
+///
 /// Created using [`Library::load_document`] or [`Library::load_document_from_bytes`].
-/// 
+///
 /// Document is closed when handle is dropped.
 pub struct DocumentHandle<'a> {
     handle: NonNull<pdfium_bindings::fpdf_document_t__>,
@@ -851,10 +851,10 @@ impl<'a> fmt::Debug for DocumentHandle<'a> {
     }
 }
 
-/// Safe handle to PDFium Page. 
-/// 
+/// Safe handle to PDFium Page.
+///
 /// Created using [`Library::load_page`].
-/// 
+///
 /// Page is closed when handle is dropped.
 pub struct PageHandle<'a> {
     handle: NonNull<pdfium_bindings::fpdf_page_t__>,
@@ -869,10 +869,10 @@ impl<'a> Drop for PageHandle<'a> {
     }
 }
 
-/// Safe handle to PDFium Bitmap. 
-/// 
+/// Safe handle to PDFium Bitmap.
+///
 /// Created using [`Library::create_bitmap`] or [`Library::create_bitmap_from_buffer`].
-/// 
+///
 /// Bitmap is destroyed when handle is dropped.
 pub struct BitmapHandle<'a> {
     handle: NonNull<pdfium_bindings::fpdf_bitmap_t__>,
@@ -1008,7 +1008,8 @@ mod tests {
             let _guard = TEST_LOCK.lock();
             let mut library = Library::init_library().unwrap();
             let password = CString::new("test").unwrap();
-            let document_handle = library.load_document_from_bytes(DUMMY_PASSWORD_PDF, Some(&password));
+            let document_handle =
+                library.load_document_from_bytes(DUMMY_PASSWORD_PDF, Some(&password));
             assert!(document_handle.is_ok());
         }
 
@@ -1017,7 +1018,8 @@ mod tests {
             let _guard = TEST_LOCK.lock();
             let mut library = Library::init_library().unwrap();
             let password = CString::new("wrong password").unwrap();
-            let document_handle = library.load_document_from_bytes(DUMMY_PASSWORD_PDF, Some(&password));
+            let document_handle =
+                library.load_document_from_bytes(DUMMY_PASSWORD_PDF, Some(&password));
             assert_eq!(document_handle.unwrap_err(), PdfiumError::BadPassword);
         }
 
