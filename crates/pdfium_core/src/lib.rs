@@ -736,7 +736,11 @@ impl Library {
     }
 
     fn get_bitmap_buffer_length<'a>(&mut self, bitmap: &BitmapHandle) -> usize {
-        self.get_bitmap_stride(bitmap) * self.get_bitmap_height(bitmap)
+        let stride = self.get_bitmap_stride(bitmap);
+        let line_width =
+            self.get_bitmap_width(bitmap) * self.get_bitmap_format(bitmap).bytes_per_pixel();
+
+        stride * self.get_bitmap_height(bitmap) - (stride - line_width)
     }
 }
 
