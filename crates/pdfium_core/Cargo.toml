@@ -10,4 +10,5 @@ edition = "2018"
 pdfium_bindings = { path = "../pdfium_bindings", version = "0.1.0" }
 
 [dev-dependencies]
+image = "0.23"
 parking_lot = "0.11"
