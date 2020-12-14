@@ -615,8 +615,8 @@ impl Library {
     /// let width = library.get_bitmap_width(&bitmap_handle);
     /// assert_eq!(width, 100);
     /// ```
-    pub fn get_bitmap_width(&mut self, bitmap: &BitmapHandle) -> u32 {
-        unsafe { pdfium_bindings::FPDFBitmap_GetWidth(bitmap.handle.as_ptr()) as u32 }
+    pub fn get_bitmap_width(&mut self, bitmap: &BitmapHandle) -> usize {
+        unsafe { pdfium_bindings::FPDFBitmap_GetWidth(bitmap.handle.as_ptr()) as usize }
     }
 
     /// Get height of a bitmap in pixels.
@@ -632,8 +632,8 @@ impl Library {
     /// let height = library.get_bitmap_height(&bitmap_handle);
     /// assert_eq!(height, 100);
     /// ```
-    pub fn get_bitmap_height(&mut self, bitmap: &BitmapHandle) -> u32 {
-        unsafe { pdfium_bindings::FPDFBitmap_GetHeight(bitmap.handle.as_ptr()) as u32 }
+    pub fn get_bitmap_height(&mut self, bitmap: &BitmapHandle) -> usize {
+        unsafe { pdfium_bindings::FPDFBitmap_GetHeight(bitmap.handle.as_ptr()) as usize }
     }
 
     /// Get number of bytes for each line in the bitmap buffer.
@@ -685,6 +685,58 @@ impl Library {
         unsafe {
             pdfium_bindings::FPDFBitmap_FillRect(bitmap.handle.as_ptr(), x, y, width, height, color)
         }
+    }
+
+    /// Get mutable data buffer of a bitmap.
+    ///
+    /// # Examples
+    /// ```
+    /// use pdfium_core::{Library, BitmapFormat};
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let mut bitmap_handle = library.create_bitmap(100, 100, BitmapFormat::BGR).unwrap();
+    ///
+    /// let buffer = library.get_bitmap_buffer_mut(&mut bitmap_handle);
+    /// assert_eq!(buffer.len(), 100 * 100 * 3);
+    /// ```
+    pub fn get_bitmap_buffer_mut<'a>(&mut self, bitmap: &'a mut BitmapHandle) -> &'a mut [u8] {
+        let length = self.get_bitmap_buffer_length(bitmap);
+
+        unsafe {
+            std::slice::from_raw_parts_mut(
+                pdfium_bindings::FPDFBitmap_GetBuffer(bitmap.handle.as_ptr()) as _,
+                length,
+            )
+        }
+    }
+
+    /// Get immutable data buffer of a bitmap.
+    ///
+    /// # Examples
+    /// ```
+    /// use pdfium_core::{Library, BitmapFormat};
+    ///
+    /// let mut library = Library::init_library().unwrap();
+    ///
+    /// let mut bitmap_handle = library.create_bitmap(100, 100, BitmapFormat::BGR).unwrap();
+    ///
+    /// let buffer = library.get_bitmap_buffer(&bitmap_handle);
+    /// assert_eq!(buffer.len(), 100 * 100 * 3);
+    /// ```
+    pub fn get_bitmap_buffer<'a>(&mut self, bitmap: &'a BitmapHandle) -> &'a [u8] {
+        let length = self.get_bitmap_buffer_length(bitmap);
+
+        unsafe {
+            std::slice::from_raw_parts(
+                pdfium_bindings::FPDFBitmap_GetBuffer(bitmap.handle.as_ptr()) as _,
+                length,
+            )
+        }
+    }
+
+    fn get_bitmap_buffer_length<'a>(&mut self, bitmap: &BitmapHandle) -> usize {
+        self.get_bitmap_stride(bitmap) * self.get_bitmap_height(bitmap)
     }
 }
 
