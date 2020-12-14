@@ -119,11 +119,11 @@ pub struct Bitmap<'a> {
 }
 
 impl<'a> Bitmap<'a> {
-    pub fn width(&self) -> u32 {
+    pub fn width(&self) -> usize {
         self.core.borrow_mut().get_bitmap_width(&self.handle)
     }
 
-    pub fn height(&self) -> u32 {
+    pub fn height(&self) -> usize {
         self.core.borrow_mut().get_bitmap_height(&self.handle)
     }
 
