@@ -5,7 +5,7 @@ static DUMMY_PDF: &'static [u8] = include_bytes!("../../../test_assets/dummy.pdf
 
 fn main() {
     // initialize library
-    let mut library = Library::init_library().unwrap();
+    let library = Library::init_library().unwrap();
 
     // load document
     let document = library.load_document_from_bytes(DUMMY_PDF, None).unwrap();

@@ -14,93 +14,85 @@
 //! ```
 
 pub use pdfium_core::{BitmapFormat, PageOrientation, PdfiumError};
-use std::cell::RefCell;
-use std::rc::Rc;
 
 pub struct Library {
-    core: Rc<RefCell<pdfium_core::Library>>,
+    core: pdfium_core::Library,
 }
 
 impl Library {
     pub fn init() -> Option<Library> {
-        pdfium_core::Library::init_library().map(|library| Library {
-            core: Rc::new(RefCell::new(library)),
-        })
+        pdfium_core::Library::init_library().map(|library| Library { core: library })
     }
 
-    pub fn document_from_bytes<'a>(&self, buffer: &'a [u8]) -> Result<Document<'a>, PdfiumError> {
-        let handle = self
-            .core
-            .borrow_mut()
-            .load_document_from_bytes(buffer, None);
+    pub fn document_from_bytes<'a>(
+        &'a self,
+        buffer: &'a [u8],
+    ) -> Result<Document<'a, 'a>, PdfiumError> {
+        let handle = self.core.load_document_from_bytes(buffer, None);
 
         handle.map(|handle| Document {
             handle,
-            core: self.core.clone(),
+            core: &self.core,
         })
     }
 
     pub fn bitmap_from_external_buffer<'a>(
-        &self,
+        &'a self,
         width: usize,
         height: usize,
         height_stride: usize,
         format: BitmapFormat,
         buffer: &'a mut [u8],
-    ) -> Result<Bitmap<'a>, PdfiumError> {
-        let handle = self.core.borrow_mut().create_bitmap_from_buffer(
-            width,
-            height,
-            format,
-            buffer,
-            height_stride,
-        );
+    ) -> Result<Bitmap<'a, 'a>, PdfiumError> {
+        let handle =
+            self.core
+                .create_bitmap_from_buffer(width, height, format, buffer, height_stride);
 
         handle.map(|handle| Bitmap {
             handle,
-            core: self.core.clone(),
+            core: &self.core,
         })
     }
 }
 
-pub struct Document<'a> {
-    handle: pdfium_core::DocumentHandle<'a>,
-    core: Rc<RefCell<pdfium_core::Library>>,
+pub struct Document<'data, 'library> {
+    handle: pdfium_core::DocumentHandle<'data, 'library>,
+    core: &'library pdfium_core::Library,
 }
 
-impl<'a> Document<'a> {
+impl Document<'_, '_> {
     pub fn page_count(&self) -> usize {
-        self.core.borrow_mut().get_page_count(&self.handle)
+        self.core.get_page_count(&self.handle)
     }
 
     pub fn page(&self, index: usize) -> Result<Page, PdfiumError> {
-        let handle = self.core.borrow_mut().load_page(&self.handle, index);
+        let handle = self.core.load_page(&self.handle, index);
 
         handle.map(|handle| Page {
             handle,
-            core: self.core.clone(),
+            core: self.core,
         })
     }
 }
 
-pub struct Page<'a> {
-    handle: pdfium_core::PageHandle<'a>,
-    core: Rc<RefCell<pdfium_core::Library>>,
+pub struct Page<'data, 'library> {
+    handle: pdfium_core::PageHandle<'data, 'library>,
+    core: &'library pdfium_core::Library,
 }
 
-impl<'a> Page<'a> {
+impl Page<'_, '_> {
     pub fn width(&self) -> f32 {
-        self.core.borrow_mut().get_page_width(&self.handle)
+        self.core.get_page_width(&self.handle)
     }
 
     pub fn height(&self) -> f32 {
-        self.core.borrow_mut().get_page_height(&self.handle)
+        self.core.get_page_height(&self.handle)
     }
 
     pub fn render_to(&self, bitmap: &mut Bitmap) {
         let width = bitmap.width() as i32;
         let height = bitmap.height() as i32;
-        self.core.borrow_mut().render_page_to_bitmap(
+        self.core.render_page_to_bitmap(
             &mut bitmap.handle,
             &self.handle,
             0,
@@ -113,23 +105,22 @@ impl<'a> Page<'a> {
     }
 }
 
-pub struct Bitmap<'a> {
-    handle: pdfium_core::BitmapHandle<'a>,
-    core: Rc<RefCell<pdfium_core::Library>>,
+pub struct Bitmap<'data, 'library> {
+    handle: pdfium_core::BitmapHandle<'data, 'library>,
+    core: &'library pdfium_core::Library,
 }
 
-impl<'a> Bitmap<'a> {
+impl Bitmap<'_, '_> {
     pub fn width(&self) -> usize {
-        self.core.borrow_mut().get_bitmap_width(&self.handle)
+        self.core.get_bitmap_width(&self.handle)
     }
 
     pub fn height(&self) -> usize {
-        self.core.borrow_mut().get_bitmap_height(&self.handle)
+        self.core.get_bitmap_height(&self.handle)
     }
 
     pub fn fill_rect(&mut self, x: i32, y: i32, width: i32, height: i32, color: u64) {
         self.core
-            .borrow_mut()
             .bitmap_fill_rect(&mut self.handle, x, y, width, height, color)
     }
 }
