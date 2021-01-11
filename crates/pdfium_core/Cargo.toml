@@ -8,10 +8,10 @@ edition = "2018"
 
 [dependencies]
 static_assertions = "1"
+parking_lot = "0.11"
 
 [build-dependencies]
 bindgen = "0.53"
 
 [dev-dependencies]
 image = "0.23"
-parking_lot = "0.11"
