@@ -97,6 +97,8 @@
 
 #![allow(clippy::too_many_arguments)]
 
+mod bindings;
+
 use static_assertions::assert_not_impl_any;
 use std::ffi::{c_void, CStr};
 use std::fmt;
@@ -120,7 +122,7 @@ static INITIALIZED: AtomicBool = AtomicBool::new(false);
 impl Drop for Library {
     fn drop(&mut self) {
         unsafe {
-            pdfium_bindings::FPDF_DestroyLibrary();
+            bindings::FPDF_DestroyLibrary();
         }
         INITIALIZED.store(false, Ordering::Relaxed);
     }
@@ -153,7 +155,7 @@ impl Library {
         if already_initialized.ok()? {
             None
         } else {
-            let config = pdfium_bindings::FPDF_LIBRARY_CONFIG_ {
+            let config = bindings::FPDF_LIBRARY_CONFIG_ {
                 version: 2,
                 m_pUserFontPaths: std::ptr::null::<*const i8>() as *mut _,
                 m_pIsolate: std::ptr::null::<std::ffi::c_void>() as *mut _,
@@ -161,7 +163,7 @@ impl Library {
                 m_pPlatform: std::ptr::null::<std::ffi::c_void>() as *mut _,
             };
             unsafe {
-                pdfium_bindings::FPDF_InitLibraryWithConfig(&config);
+                bindings::FPDF_InitLibraryWithConfig(&config);
             }
             Some(Library(Default::default()))
         }
@@ -171,7 +173,7 @@ impl Library {
     ///
     /// If the previous PDFium function call succeeded, this function has undefined behavior. (From personal experience, I have found it remains unchanged.)
     fn get_last_error(&self) -> Option<PdfiumError> {
-        PdfiumError::from_code(unsafe { pdfium_bindings::FPDF_GetLastError() as u32 })
+        PdfiumError::from_code(unsafe { bindings::FPDF_GetLastError() as u32 })
     }
 
     /// Get last last error code when a function fails, if `None` default to [`Unknown`](PdfiumError::Unknown).
@@ -228,8 +230,7 @@ impl Library {
 
         let path = cstr(path)?;
 
-        let handle =
-            NonNull::new(unsafe { pdfium_bindings::FPDF_LoadDocument(path.as_ptr(), password) });
+        let handle = NonNull::new(unsafe { bindings::FPDF_LoadDocument(path.as_ptr(), password) });
 
         handle
             .map(|handle| DocumentHandle {
@@ -263,7 +264,7 @@ impl Library {
         let password = password.map(|x| x.as_ptr()).unwrap_or_else(std::ptr::null);
 
         let handle = NonNull::new(unsafe {
-            pdfium_bindings::FPDF_LoadMemDocument(
+            bindings::FPDF_LoadMemDocument(
                 buffer.as_ptr() as *mut c_void,
                 buffer.len() as i32,
                 password,
@@ -295,7 +296,7 @@ impl Library {
     /// assert_eq!(page_count, 1);
     /// ```
     pub fn get_page_count(&self, document: &DocumentHandle) -> usize {
-        unsafe { pdfium_bindings::FPDF_GetPageCount(document.handle.as_ptr()) as usize }
+        unsafe { bindings::FPDF_GetPageCount(document.handle.as_ptr()) as usize }
     }
 
     /// Load a page inside the document.
@@ -331,7 +332,7 @@ impl Library {
         index: usize,
     ) -> Result<PageHandle<'data, 'library>, PdfiumError> {
         let handle = NonNull::new(unsafe {
-            pdfium_bindings::FPDF_LoadPage(document.handle.as_ptr(), index as i32)
+            bindings::FPDF_LoadPage(document.handle.as_ptr(), index as i32)
         });
 
         handle
@@ -363,7 +364,7 @@ impl Library {
     /// assert_eq!(page_width, 595.0);
     /// ```
     pub fn get_page_width(&self, page: &PageHandle) -> f32 {
-        unsafe { pdfium_bindings::FPDF_GetPageWidthF(page.handle.as_ptr()) }
+        unsafe { bindings::FPDF_GetPageWidthF(page.handle.as_ptr()) }
     }
 
     /// Get page height.
@@ -386,7 +387,7 @@ impl Library {
     /// assert_eq!(page_height, 842.0);
     /// ```
     pub fn get_page_height(&self, page: &PageHandle) -> f32 {
-        unsafe { pdfium_bindings::FPDF_GetPageHeightF(page.handle.as_ptr()) }
+        unsafe { bindings::FPDF_GetPageHeightF(page.handle.as_ptr()) }
     }
 
     /// Render contents of a page to a device independent bitmap.
@@ -466,7 +467,7 @@ impl Library {
         flags: i32,
     ) {
         unsafe {
-            pdfium_bindings::FPDF_RenderPageBitmap(
+            bindings::FPDF_RenderPageBitmap(
                 bitmap.handle.as_ptr(),
                 page.handle.as_ptr(),
                 x,
@@ -596,7 +597,7 @@ impl Library {
         let buffer = buffer.unwrap_or_else(std::ptr::null);
 
         let handle = NonNull::new(unsafe {
-            pdfium_bindings::FPDFBitmap_CreateEx(
+            bindings::FPDFBitmap_CreateEx(
                 width as i32,
                 height as i32,
                 format as i32,
@@ -628,7 +629,7 @@ impl Library {
     /// assert_eq!(format, BitmapFormat::BGRA);
     /// ```
     pub fn get_bitmap_format(&self, bitmap: &BitmapHandle) -> BitmapFormat {
-        let format = unsafe { pdfium_bindings::FPDFBitmap_GetFormat(bitmap.handle.as_ptr()) };
+        let format = unsafe { bindings::FPDFBitmap_GetFormat(bitmap.handle.as_ptr()) };
 
         BitmapFormat::from_i32(format).unwrap()
     }
@@ -647,7 +648,7 @@ impl Library {
     /// assert_eq!(width, 100);
     /// ```
     pub fn get_bitmap_width(&self, bitmap: &BitmapHandle) -> usize {
-        unsafe { pdfium_bindings::FPDFBitmap_GetWidth(bitmap.handle.as_ptr()) as usize }
+        unsafe { bindings::FPDFBitmap_GetWidth(bitmap.handle.as_ptr()) as usize }
     }
 
     /// Get height of a bitmap in pixels.
@@ -664,7 +665,7 @@ impl Library {
     /// assert_eq!(height, 100);
     /// ```
     pub fn get_bitmap_height(&self, bitmap: &BitmapHandle) -> usize {
-        unsafe { pdfium_bindings::FPDFBitmap_GetHeight(bitmap.handle.as_ptr()) as usize }
+        unsafe { bindings::FPDFBitmap_GetHeight(bitmap.handle.as_ptr()) as usize }
     }
 
     /// Get number of bytes for each line in the bitmap buffer.
@@ -681,7 +682,7 @@ impl Library {
     /// assert_eq!(stride, 400);
     /// ```
     pub fn get_bitmap_stride(&self, bitmap: &BitmapHandle) -> usize {
-        unsafe { pdfium_bindings::FPDFBitmap_GetStride(bitmap.handle.as_ptr()) as usize }
+        unsafe { bindings::FPDFBitmap_GetStride(bitmap.handle.as_ptr()) as usize }
     }
 
     /// Fill a rectangle in a bitmap.
@@ -713,9 +714,7 @@ impl Library {
         height: i32,
         color: u64,
     ) {
-        unsafe {
-            pdfium_bindings::FPDFBitmap_FillRect(bitmap.handle.as_ptr(), x, y, width, height, color)
-        }
+        unsafe { bindings::FPDFBitmap_FillRect(bitmap.handle.as_ptr(), x, y, width, height, color) }
     }
 
     /// Get mutable data buffer of a bitmap.
@@ -736,7 +735,7 @@ impl Library {
 
         unsafe {
             std::slice::from_raw_parts_mut(
-                pdfium_bindings::FPDFBitmap_GetBuffer(bitmap.handle.as_ptr()) as _,
+                bindings::FPDFBitmap_GetBuffer(bitmap.handle.as_ptr()) as _,
                 length,
             )
         }
@@ -760,7 +759,7 @@ impl Library {
 
         unsafe {
             std::slice::from_raw_parts(
-                pdfium_bindings::FPDFBitmap_GetBuffer(bitmap.handle.as_ptr()) as _,
+                bindings::FPDFBitmap_GetBuffer(bitmap.handle.as_ptr()) as _,
                 length,
             )
         }
@@ -780,29 +779,29 @@ impl Library {
 #[derive(PartialEq, Eq, Debug)]
 pub enum PdfiumError {
     /// Unknown error.
-    Unknown = pdfium_bindings::FPDF_ERR_UNKNOWN as i32,
+    Unknown = bindings::FPDF_ERR_UNKNOWN as i32,
     /// File not found or could not be opened.
-    BadFile = pdfium_bindings::FPDF_ERR_FILE as i32,
+    BadFile = bindings::FPDF_ERR_FILE as i32,
     /// File not in PDF format or corrupted.
-    BadFormat = pdfium_bindings::FPDF_ERR_FORMAT as i32,
+    BadFormat = bindings::FPDF_ERR_FORMAT as i32,
     /// Password required or incorrect password.
-    BadPassword = pdfium_bindings::FPDF_ERR_PASSWORD as i32,
+    BadPassword = bindings::FPDF_ERR_PASSWORD as i32,
     /// Unsupported security scheme.
-    UnsupportedSecurityScheme = pdfium_bindings::FPDF_ERR_SECURITY as i32,
+    UnsupportedSecurityScheme = bindings::FPDF_ERR_SECURITY as i32,
     /// Page not found or content error.
-    BadPage = pdfium_bindings::FPDF_ERR_PAGE as i32,
+    BadPage = bindings::FPDF_ERR_PAGE as i32,
 }
 
 impl PdfiumError {
     fn from_code(code: u32) -> Option<PdfiumError> {
         match code {
-            pdfium_bindings::FPDF_ERR_SUCCESS => None,
-            pdfium_bindings::FPDF_ERR_UNKNOWN => Some(PdfiumError::Unknown),
-            pdfium_bindings::FPDF_ERR_FILE => Some(PdfiumError::BadFile),
-            pdfium_bindings::FPDF_ERR_FORMAT => Some(PdfiumError::BadFormat),
-            pdfium_bindings::FPDF_ERR_PASSWORD => Some(PdfiumError::BadPassword),
-            pdfium_bindings::FPDF_ERR_SECURITY => Some(PdfiumError::UnsupportedSecurityScheme),
-            pdfium_bindings::FPDF_ERR_PAGE => Some(PdfiumError::BadPage),
+            bindings::FPDF_ERR_SUCCESS => None,
+            bindings::FPDF_ERR_UNKNOWN => Some(PdfiumError::Unknown),
+            bindings::FPDF_ERR_FILE => Some(PdfiumError::BadFile),
+            bindings::FPDF_ERR_FORMAT => Some(PdfiumError::BadFormat),
+            bindings::FPDF_ERR_PASSWORD => Some(PdfiumError::BadPassword),
+            bindings::FPDF_ERR_SECURITY => Some(PdfiumError::UnsupportedSecurityScheme),
+            bindings::FPDF_ERR_PAGE => Some(PdfiumError::BadPage),
             _ => Some(PdfiumError::Unknown),
         }
     }
@@ -813,13 +812,13 @@ impl PdfiumError {
 #[derive(Debug, PartialEq, Eq)]
 pub enum BitmapFormat {
     /// Gray scale bitmap, one byte per pixel.
-    GreyScale = pdfium_bindings::FPDFBitmap_Gray as i32,
+    GreyScale = bindings::FPDFBitmap_Gray as i32,
     /// 3 bytes per pixel, byte order: blue, green, red.
-    BGR = pdfium_bindings::FPDFBitmap_BGR as i32,
+    BGR = bindings::FPDFBitmap_BGR as i32,
     /// 4 bytes per pixel, byte order: blue, green, red, unused.
-    BGRx = pdfium_bindings::FPDFBitmap_BGRx as i32,
+    BGRx = bindings::FPDFBitmap_BGRx as i32,
     /// 4 bytes per pixel, byte order: blue, green, red, alpha.
-    BGRA = pdfium_bindings::FPDFBitmap_BGRA as i32,
+    BGRA = bindings::FPDFBitmap_BGRA as i32,
 }
 
 impl BitmapFormat {
@@ -874,44 +873,46 @@ pub mod rendering_flags {
     //! let flags = GRAY_SCALE | PRINTING;
     //! ```
 
+    use super::bindings;
+
     /// Normal display (No flags)
     pub const NORMAL: i32 = 0;
 
     /// Set if annotations are to be rendered.
-    pub const ANNOTATIONS: i32 = pdfium_bindings::FPDF_ANNOT as i32;
+    pub const ANNOTATIONS: i32 = bindings::FPDF_ANNOT as i32;
 
     /// Set if using text rendering optimized for LCD display. This flag will only
     /// take effect if anti-aliasing is enabled for text.
-    pub const LCD_TEXT: i32 = pdfium_bindings::FPDF_LCD_TEXT as i32;
+    pub const LCD_TEXT: i32 = bindings::FPDF_LCD_TEXT as i32;
 
     /// Don't use the native text output available on some platforms
-    pub const NO_NATIVE_TEXT: i32 = pdfium_bindings::FPDF_NO_NATIVETEXT as i32;
+    pub const NO_NATIVE_TEXT: i32 = bindings::FPDF_NO_NATIVETEXT as i32;
 
     /// Grayscale output
-    pub const GRAY_SCALE: i32 = pdfium_bindings::FPDF_GRAYSCALE as i32;
+    pub const GRAY_SCALE: i32 = bindings::FPDF_GRAYSCALE as i32;
 
     /// Limit image cache size.
-    pub const LIMITED_IMAGE_CACHE: i32 = pdfium_bindings::FPDF_RENDER_LIMITEDIMAGECACHE as i32;
+    pub const LIMITED_IMAGE_CACHE: i32 = bindings::FPDF_RENDER_LIMITEDIMAGECACHE as i32;
 
     /// Always use halftone for image stretching.
-    pub const FORCE_HALFTONE: i32 = pdfium_bindings::FPDF_RENDER_FORCEHALFTONE as i32;
+    pub const FORCE_HALFTONE: i32 = bindings::FPDF_RENDER_FORCEHALFTONE as i32;
 
     /// Render for printing.
-    pub const PRINTING: i32 = pdfium_bindings::FPDF_PRINTING as i32;
+    pub const PRINTING: i32 = bindings::FPDF_PRINTING as i32;
 
     /// Set to disable anti-aliasing on text. This flag will also disable LCD
     /// optimization for text rendering.
-    pub const NO_SMOOTH_TEXT: i32 = pdfium_bindings::FPDF_RENDER_NO_SMOOTHTEXT as i32;
+    pub const NO_SMOOTH_TEXT: i32 = bindings::FPDF_RENDER_NO_SMOOTHTEXT as i32;
 
     /// Set to disable anti-aliasing on images.
-    pub const NO_SMOOTH_IMAGE: i32 = pdfium_bindings::FPDF_RENDER_NO_SMOOTHIMAGE as i32;
+    pub const NO_SMOOTH_IMAGE: i32 = bindings::FPDF_RENDER_NO_SMOOTHIMAGE as i32;
 
     /// Set to disable anti-aliasing on paths.
-    pub const NO_SMOOTH_PATH: i32 = pdfium_bindings::FPDF_RENDER_NO_SMOOTHPATH as i32;
+    pub const NO_SMOOTH_PATH: i32 = bindings::FPDF_RENDER_NO_SMOOTHPATH as i32;
 
     /// Set whether to render in a reverse Byte order, this flag is only used when
     /// rendering to a bitmap.
-    pub const REVERSE_BYTE_ORDER: i32 = pdfium_bindings::FPDF_REVERSE_BYTE_ORDER as i32;
+    pub const REVERSE_BYTE_ORDER: i32 = bindings::FPDF_REVERSE_BYTE_ORDER as i32;
 }
 
 /// Safe handle to PDFium Document.
@@ -920,7 +921,7 @@ pub mod rendering_flags {
 ///
 /// Document is closed when handle is dropped.
 pub struct DocumentHandle<'a, 'b> {
-    handle: NonNull<pdfium_bindings::fpdf_document_t__>,
+    handle: NonNull<bindings::fpdf_document_t__>,
     data_life_time: PhantomData<&'a [u8]>,
     library_life_time: PhantomData<&'b Library>,
 }
@@ -930,7 +931,7 @@ assert_not_impl_any!(DocumentHandle: Sync, Send);
 impl Drop for DocumentHandle<'_, '_> {
     fn drop(&mut self) {
         unsafe {
-            pdfium_bindings::FPDF_CloseDocument(self.handle.as_ptr());
+            bindings::FPDF_CloseDocument(self.handle.as_ptr());
         }
     }
 }
@@ -947,7 +948,7 @@ impl fmt::Debug for DocumentHandle<'_, '_> {
 ///
 /// Page is closed when handle is dropped.
 pub struct PageHandle<'a, 'b> {
-    handle: NonNull<pdfium_bindings::fpdf_page_t__>,
+    handle: NonNull<bindings::fpdf_page_t__>,
     data_life_time: PhantomData<&'a [u8]>,
     library_life_time: PhantomData<&'b Library>,
 }
@@ -957,7 +958,7 @@ assert_not_impl_any!(PageHandle: Sync, Send);
 impl Drop for PageHandle<'_, '_> {
     fn drop(&mut self) {
         unsafe {
-            pdfium_bindings::FPDF_ClosePage(self.handle.as_ptr());
+            bindings::FPDF_ClosePage(self.handle.as_ptr());
         }
     }
 }
@@ -968,7 +969,7 @@ impl Drop for PageHandle<'_, '_> {
 ///
 /// Bitmap is destroyed when handle is dropped.
 pub struct BitmapHandle<'a, 'b> {
-    handle: NonNull<pdfium_bindings::fpdf_bitmap_t__>,
+    handle: NonNull<bindings::fpdf_bitmap_t__>,
     data_life_time: PhantomData<&'a mut [u8]>,
     library_life_time: PhantomData<&'b Library>,
 }
@@ -978,7 +979,7 @@ assert_not_impl_any!(BitmapHandle: Sync, Send);
 impl Drop for BitmapHandle<'_, '_> {
     fn drop(&mut self) {
         unsafe {
-            pdfium_bindings::FPDFBitmap_Destroy(self.handle.as_ptr());
+            bindings::FPDFBitmap_Destroy(self.handle.as_ptr());
         }
     }
 }
