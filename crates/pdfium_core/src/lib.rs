@@ -99,12 +99,12 @@
 
 mod bindings;
 
+use parking_lot::{const_mutex, Mutex};
 use static_assertions::assert_not_impl_any;
 use std::ffi::{c_void, CStr};
 use std::fmt;
 use std::marker::PhantomData;
 use std::ptr::NonNull;
-use std::sync::atomic::{AtomicBool, Ordering};
 
 /// A properly initialized instance of the PDFium library.
 ///
@@ -117,14 +117,15 @@ pub struct Library(PhantomData<*mut ()>);
 
 assert_not_impl_any!(Library: Sync, Send);
 
-static INITIALIZED: AtomicBool = AtomicBool::new(false);
+static INITIALIZED: Mutex<bool> = const_mutex(false);
 
 impl Drop for Library {
     fn drop(&mut self) {
+        let mut initialized = INITIALIZED.lock();
         unsafe {
             bindings::FPDF_DestroyLibrary();
         }
-        INITIALIZED.store(false, Ordering::Relaxed);
+        *initialized = false;
     }
 }
 
@@ -149,10 +150,9 @@ impl Library {
     /// assert!(Library::init_library().is_some());
     /// ```
     pub fn init_library() -> Option<Library> {
-        let already_initialized =
-            INITIALIZED.compare_exchange(false, true, Ordering::SeqCst, Ordering::SeqCst);
+        let mut initialized = INITIALIZED.lock();
 
-        if already_initialized.ok()? {
+        if *initialized {
             None
         } else {
             let config = bindings::FPDF_LIBRARY_CONFIG_ {
@@ -165,6 +165,7 @@ impl Library {
             unsafe {
                 bindings::FPDF_InitLibraryWithConfig(&config);
             }
+            *initialized = true;
             Some(Library(Default::default()))
         }
     }
@@ -999,9 +1000,6 @@ fn cstr(path: &Path) -> Result<CString, PdfiumError> {
 fn cstr(path: &Path) -> Result<CString, PdfiumError> {
     CString::new(path.as_os_str().as_bytes()).map_err(|_| PdfiumError::BadFile)
 }
-
-#[cfg(test)]
-use parking_lot::{const_mutex, Mutex};
 
 #[cfg(test)]
 static TEST_LOCK: Mutex<()> = const_mutex(());
