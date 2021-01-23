@@ -7,11 +7,10 @@ A safe, minimal Rust wrapper around the PDFium library.
 - 🚀 Prevent misuse (Ensure synchronization between threads)
 - 🚀 Documentation
 - 👷‍♂️ Add missing APIs
-- Examples
-- Improve Tests
+- 🚀 Examples
+- 🚀 Improve Tests
 - Add CI
-- Choose Licence
+- 🚀 Choose Licence
 - Finish README
 - Get code review
 - Publish on crates.io
-- Rendering Pool
