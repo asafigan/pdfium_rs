@@ -12,6 +12,13 @@
 //!     let document = library.document_from_bytes(&[]);
 //! });
 //! ```
+//!
+//! ## Install PDFium
+//! This crate loads PDFium as a binary library and also uses the headers from the system so it most be installed in order to use this crate.
+//!
+//! Download the prebuilt PDFium binary from: https://github.com/bblanchon/pdfium-binaries.
+//!
+//! This crate doesn't use any the V8 or XFA features from PDFium so you only have to use the base library.
 
 #![forbid(unsafe_code)]
 
