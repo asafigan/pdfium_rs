@@ -95,7 +95,6 @@
 //! The handles and `[Library]` are `!Send + !Sync`. This is because the PDFium library is not thread safe.
 //! Being able to send or use these types between threads would not be safe.
 
-#![allow(clippy::too_many_arguments)]
 #![warn(missing_docs)]
 
 mod bindings;
