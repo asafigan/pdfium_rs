@@ -13,6 +13,8 @@
 //! });
 //! ```
 
+#![forbid(unsafe_code)]
+
 pub use pdfium_core::{BitmapFormat, PageOrientation, PdfiumError};
 
 pub struct Library {

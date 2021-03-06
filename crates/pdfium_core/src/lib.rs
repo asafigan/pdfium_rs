@@ -96,6 +96,7 @@
 //! Being able to send or use these types between threads would not be safe.
 
 #![allow(clippy::too_many_arguments)]
+#![warn(missing_docs)]
 
 mod bindings;
 
